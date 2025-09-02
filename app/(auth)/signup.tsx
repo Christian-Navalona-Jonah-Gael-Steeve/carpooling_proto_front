@@ -118,6 +118,15 @@ export default function SignupScreen() {
         </View>
 
         <View style={styles.inputContainer}>
+          <FontAwesome5 name="id-card" size={20} color="#6B7280" />
+          <TextInput
+            style={styles.input}
+            placeholder={`Numéro de CIN`}
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
           <MaterialIcons name="lock-outline" size={20} color="#6B7280" />
           <TextInput
             style={styles.input}
