@@ -61,7 +61,7 @@ export default function LoginScreen() {
           <Text style={styles.signupLink}>
             {`Vouz n'avez pas encore de compte ?`}
           </Text>
-          <Text style={styles.signupLinkBold}>{`Inscrivez-vous ici..`}</Text>
+          <Text style={styles.signupLinkBold}>{`S'inscrire`}</Text>
         </TouchableOpacity>
       </View>
     </View>
