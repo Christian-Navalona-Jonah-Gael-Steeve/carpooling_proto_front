@@ -1,7 +1,10 @@
+import { useSignupMutation } from "@/hooks/mutations/auth.mutations";
+import { SignupPayload } from "@/lib/types/auth.types";
 import Entypo from "@expo/vector-icons/Entypo";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
+import { useFormik } from "formik";
 import React, { useState } from "react";
 import {
     ScrollView,
@@ -15,6 +18,24 @@ import {
 export default function SignupScreen() {
   const router = useRouter();
   const [userType, setUserType] = useState<"passenger" | "driver">("passenger");
+  const { mutateAsync: signup } = useSignupMutation();
+
+  const { values, setFieldValue } = useFormik<SignupPayload>({
+    initialValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phoneNumber: "",
+      cinNumber: "",
+      password: "",
+      confirmPassword: "",
+    },
+    enableReinitialize: true,
+    onSubmit: async (payload: SignupPayload) => {
+      await signup(payload);
+      router.replace("/(auth)/login");
+    },
+  });
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -84,6 +105,8 @@ export default function SignupScreen() {
             style={styles.input}
             placeholder={`Nom`}
             placeholderTextColor="#9CA3AF"
+            value={values.lastName}
+            onChangeText={(value) => setFieldValue("lastName", value)}
           />
         </View>
 
@@ -93,6 +116,8 @@ export default function SignupScreen() {
             style={styles.input}
             placeholder={`Prénom`}
             placeholderTextColor="#9CA3AF"
+            value={values.lastName}
+            onChangeText={(value) => setFieldValue("lastName", value)}
           />
         </View>
 
@@ -104,6 +129,8 @@ export default function SignupScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             placeholderTextColor="#9CA3AF"
+            value={values.firstName}
+            onChangeText={(value) => setFieldValue("firstName", value)}
           />
         </View>
 
@@ -114,6 +141,8 @@ export default function SignupScreen() {
             placeholder={`Numéro de téléphone`}
             keyboardType="phone-pad"
             placeholderTextColor="#9CA3AF"
+            value={values.phoneNumber}
+            onChangeText={(value) => setFieldValue("phoneNumber", value)}
           />
         </View>
 
@@ -123,6 +152,8 @@ export default function SignupScreen() {
             style={styles.input}
             placeholder={`Numéro de CIN`}
             placeholderTextColor="#9CA3AF"
+            value={values.cinNumber}
+            onChangeText={(value) => setFieldValue("cinNumber", value)}
           />
         </View>
 
@@ -133,6 +164,8 @@ export default function SignupScreen() {
             placeholder={`Mot de passe`}
             secureTextEntry
             placeholderTextColor="#9CA3AF"
+            value={values.password}
+            onChangeText={(value) => setFieldValue("password", value)}
           />
         </View>
 
@@ -143,6 +176,8 @@ export default function SignupScreen() {
             placeholder={`Confirmation du mot de passe`}
             secureTextEntry
             placeholderTextColor="#9CA3AF"
+            value={values.confirmPassword}
+            onChangeText={(value) => setFieldValue("confirmPassword", value)}
           />
         </View>
 

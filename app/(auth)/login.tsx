@@ -1,6 +1,14 @@
+import {
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+} from "@/constants/store-keys.constants";
+import { useSigninMutation } from "@/hooks/mutations/auth.mutations";
+import { SigninPayload } from "@/lib/types/auth.types";
 import Entypo from "@expo/vector-icons/Entypo";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { useFormik } from "formik";
 import React from "react";
 import {
   StyleSheet,
@@ -12,6 +20,25 @@ import {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { mutateAsync: signin } = useSigninMutation();
+
+  const { values, setFieldValue, handleSubmit } = useFormik<SigninPayload>({
+    initialValues: {
+      email: "",
+      password: "",
+    },
+    enableReinitialize: true,
+    onSubmit: async (payload: SigninPayload) => {
+      const response = await signin(payload);
+      await Promise.allSettled([
+        AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken),
+        AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken),
+      ]);
+
+      // TODO: Redirect to HomePage
+      router.push("/(auth)/signup");
+    },
+  });
 
   return (
     <View style={styles.container}>
@@ -36,6 +63,8 @@ export default function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             placeholderTextColor="#9CA3AF"
+            value={values.email}
+            onChangeText={(value) => setFieldValue("email", value)}
           />
         </View>
 
@@ -46,6 +75,8 @@ export default function LoginScreen() {
             placeholder={`Mot de passe`}
             secureTextEntry
             placeholderTextColor="#9CA3AF"
+            value={values.password}
+            onChangeText={(value) => setFieldValue("password", value)}
           />
         </View>
 
@@ -53,7 +84,10 @@ export default function LoginScreen() {
           <Text style={styles.forgotPassword}>{`Mot de passe oublié`}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.loginButton}>
+        <TouchableOpacity
+          style={styles.loginButton}
+          onPress={() => handleSubmit()}
+        >
           <Text style={styles.loginButtonText}>{`Se connecter`}</Text>
         </TouchableOpacity>
 
