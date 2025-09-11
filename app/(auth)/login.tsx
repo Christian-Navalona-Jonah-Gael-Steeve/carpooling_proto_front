@@ -4,7 +4,6 @@ import {
 } from "@/constants/store-keys.constants";
 import { useSigninMutation } from "@/hooks/mutations/auth.mutations";
 import { SigninPayload } from "@/lib/types/auth.types";
-import Entypo from "@expo/vector-icons/Entypo";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -35,19 +34,13 @@ export default function LoginScreen() {
         AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken),
       ]);
 
-      router.push("/(tabs)/home");
+      router.replace("/(tabs)/home");
     },
   });
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-        >
-          <Entypo name="chevron-left" size={24} color="#374151" />
-        </TouchableOpacity>
         <Text style={styles.title}>{`Bienvenue !`}</Text>
       </View>
 

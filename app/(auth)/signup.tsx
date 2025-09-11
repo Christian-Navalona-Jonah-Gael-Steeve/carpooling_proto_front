@@ -7,12 +7,12 @@ import { useRouter } from "expo-router";
 import { useFormik } from "formik";
 import React, { useState } from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function SignupScreen() {
@@ -41,7 +41,7 @@ export default function SignupScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.replace("/(auth)/login")}
           style={styles.backButton}
         >
           <Entypo name="chevron-left" size={24} color="#374151" />
