@@ -1,73 +1,28 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Chat from "../../components/chat/Chat";
 import ChatList from "../../components/chat/ChatList";
-import { Chat as ChatType, Message } from "../../components/chat/types";
+import { ChatProvider, useChat } from "../../components/chat/ChatContext";
 
-export default function ChatsScreen() {
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+function ChatsContent() {
+  const { state, selectChat, loadChats } = useChat();
+  const { chats, messages, selectedChatId } = state;
 
-  const chats: ChatType[] = [
-    {
-      id: "1",
-      participantName: "Sarah Johnson",
-      participantType: "driver",
-      lastMessage: "I'll be there in 5 minutes",
-      lastMessageTime: "2m ago",
-      unreadCount: 2,
-      rideInfo: "Downtown → Airport",
-    },
-    {
-      id: "2",
-      participantName: "Mike Chen",
-      participantType: "passenger",
-      lastMessage: "Thanks for the ride!",
-      lastMessageTime: "1h ago",
-      unreadCount: 0,
-      rideInfo: "University → Mall",
-    },
-    {
-      id: "3",
-      participantName: "Lisa Wang",
-      participantType: "driver",
-      lastMessage: "Meet you at the entrance",
-      lastMessageTime: "3h ago",
-      unreadCount: 1,
-      rideInfo: "Business District → Home",
-    },
-  ];
+  useEffect(() => {
+    loadChats();
+  }, [loadChats]);
 
-  const messages: Message[] = [
-    {
-      id: "1",
-      senderId: "1",
-      text: "Hi! I'm on my way to pick you up",
-      timestamp: "14:25",
-      isOwn: false,
-    },
-    {
-      id: "2",
-      senderId: "me",
-      text: "Great! I'm waiting at the entrance",
-      timestamp: "14:26",
-      isOwn: true,
-    },
-    {
-      id: "3",
-      senderId: "1",
-      text: "I'll be there in 5 minutes",
-      timestamp: "14:28",
-      isOwn: false,
-    },
-  ];
+  if (selectedChatId) {
+    const chat = chats.find((c) => c.id === selectedChatId);
+    const chatMessages = messages[selectedChatId] || [];
+    
+    if (!chat) return null;
 
-  if (selectedChat) {
-    const chat = chats.find((c) => c.id === selectedChat)!;
     return (
       <Chat
         chat={chat}
-        messages={messages}
-        onBack={() => setSelectedChat(null)}
+        messages={chatMessages}
+        onBack={() => selectChat(null)}
       />
     );
   }
@@ -75,11 +30,19 @@ export default function ChatsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{`Discussions`}</Text>
+        <Text style={styles.title}>Discussions</Text>
       </View>
 
-      <ChatList chats={chats} onSelect={setSelectedChat} />
+      <ChatList chats={chats} onSelect={selectChat} />
     </View>
+  );
+}
+
+export default function ChatsScreen() {
+  return (
+    <ChatProvider>
+      <ChatsContent />
+    </ChatProvider>
   );
 }
 

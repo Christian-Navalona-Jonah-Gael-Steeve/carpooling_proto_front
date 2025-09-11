@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Chat } from "./types";
+import { Chat } from "../../lib/types/chat.types";
 
 type Props = {
   chat: Chat;
@@ -9,7 +9,13 @@ type Props = {
 
 export default function ChatListItem({ chat, onPress }: Props) {
   return (
-    <TouchableOpacity style={styles.chatItem} onPress={onPress}>
+    <TouchableOpacity
+      style={styles.chatItem}
+      onPress={onPress}
+      accessibilityLabel={`Chat with ${chat.participantName}, ${chat.participantType}, ride: ${chat.rideInfo}, last message: ${chat.lastMessage}`}
+      accessibilityRole="button"
+      accessibilityHint="Double tap to open this conversation"
+    >
       <View style={styles.chatAvatar}>
         <Text style={styles.chatInitial}>{chat.participantName.charAt(0)}</Text>
       </View>
@@ -103,4 +109,3 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 });
-

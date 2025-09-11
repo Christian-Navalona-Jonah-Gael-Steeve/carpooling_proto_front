@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Message } from "./types";
+import { Message } from "../../lib/types/chat.types";
 
 type Props = {
   message: Message;
@@ -8,11 +8,20 @@ type Props = {
 
 export default function MessageItem({ message }: Props) {
   return (
-    <View style={[styles.messageBubble, message.isOwn && styles.ownMessage]}>
-      <Text style={[styles.messageText, message.isOwn && styles.ownMessageText]}>
+    <View
+      style={[styles.messageBubble, message.isOwn && styles.ownMessage]}
+      accessibilityLabel={`${message.isOwn ? "You" : "Contact"} said: ${
+        message.text
+      } at ${message.timestamp}`}
+    >
+      <Text
+        style={[styles.messageText, message.isOwn && styles.ownMessageText]}
+      >
         {message.text}
       </Text>
-      <Text style={[styles.messageTime, message.isOwn && styles.ownMessageTime]}>
+      <Text
+        style={[styles.messageTime, message.isOwn && styles.ownMessageTime]}
+      >
         {message.timestamp}
       </Text>
     </View>
@@ -51,4 +60,3 @@ const styles = StyleSheet.create({
     color: "#E5E7EB",
   },
 });
-
