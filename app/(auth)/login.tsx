@@ -35,8 +35,7 @@ export default function LoginScreen() {
         AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken),
       ]);
 
-      // TODO: Redirect to HomePage
-      router.push("/(auth)/signup");
+      router.push("/(tabs)/home");
     },
   });
 
