@@ -1,4 +1,3 @@
-import Feather from "@expo/vector-icons/Feather";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 
@@ -43,7 +42,12 @@ export default function TabLayout() {
         options={{
           title: "Accueil",
           tabBarIcon: ({ size, color }) => (
-            <Feather name="chrome" size={size} color={color} strokeWidth={2} />
+            <Ionicons
+              name="add-circle-outline"
+              size={size}
+              color={color}
+              strokeWidth={2}
+            />
           ),
         }}
       />
