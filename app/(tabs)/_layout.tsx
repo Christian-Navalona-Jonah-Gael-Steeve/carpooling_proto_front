@@ -1,5 +1,5 @@
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import Feather from "@expo/vector-icons/Feather";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 
 export default function TabLayout() {
@@ -29,8 +29,8 @@ export default function TabLayout() {
         options={{
           title: "Search",
           tabBarIcon: ({ size, color }) => (
-            <FontAwesome5
-              name="search"
+            <Ionicons
+              name="search-outline"
               size={size}
               color={color}
               strokeWidth={2}
@@ -43,23 +43,18 @@ export default function TabLayout() {
         options={{
           title: "Accueil",
           tabBarIcon: ({ size, color }) => (
-            <MaterialIcons
-              name="home"
-              size={size}
-              color={color}
-              strokeWidth={2}
-            />
+            <Feather name="chrome" size={size} color={color} strokeWidth={2} />
           ),
         }}
       />
 
       <Tabs.Screen
-        name="chat"
+        name="chats"
         options={{
-          title: "Chat",
+          title: "Chats",
           tabBarIcon: ({ size, color }) => (
-            <MaterialIcons
-              name="message"
+            <Ionicons
+              name="chatbubbles-outline"
               size={size}
               color={color}
               strokeWidth={2}
