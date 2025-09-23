@@ -1,13 +1,9 @@
-import {
-  ACCESS_TOKEN_KEY,
-  REFRESH_TOKEN_KEY,
-} from "@/constants/store-keys.constants";
 import { useSigninMutation } from "@/hooks/mutations/auth.mutations";
 import { SigninPayload } from "@/lib/types/auth.types";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useFormik } from "formik";
+import { useAuth } from "@/contexts/AuthContext";
 import React from "react";
 import {
   StyleSheet,
@@ -17,9 +13,14 @@ import {
   View,
 } from "react-native";
 
+/**
+ * Login screen component with authentication integration
+ * Handles user sign-in and navigation to protected tabs
+ */
 export default function LoginScreen() {
   const router = useRouter();
   const { mutateAsync: signin } = useSigninMutation();
+  const { login } = useAuth();
 
   const { values, setFieldValue, handleSubmit } = useFormik<SigninPayload>({
     initialValues: {
@@ -28,13 +29,22 @@ export default function LoginScreen() {
     },
     enableReinitialize: true,
     onSubmit: async (payload: SigninPayload) => {
-      const response = await signin(payload);
-      await Promise.allSettled([
-        AsyncStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken),
-        AsyncStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken),
-      ]);
+      try {
+        // Authenticate user via API
+        const response = await signin(payload);
 
-      router.replace("/(tabs)/home");
+        // Use AuthContext to handle login and token storage
+        await login({
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+        });
+
+        // Navigate to protected tabs
+        router.replace("/(tabs)/home");
+      } catch (error) {
+        console.error("Login failed:", error);
+        // Handle login error (you might want to show an error message)
+      }
     },
   });
 
