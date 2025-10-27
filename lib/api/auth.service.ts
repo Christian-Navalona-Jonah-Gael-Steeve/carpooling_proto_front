@@ -3,13 +3,16 @@ import { IUser } from "../types/user.types"
 import { api } from "./base/api"
 
 export const AuthServive = {
-    signin: (payload: SigninPayload): Promise<AuthResponse> => {
-        return api.post<AuthResponse>('/auth/signin', payload).then(response => response.data)
+    signin: async (payload: SigninPayload): Promise<AuthResponse> => {
+        const response = await api.post<AuthResponse>('/auth/signin', payload)
+        return response.data
     },
-    signup: (payload: SignupPayload): Promise<any> => {
-        return api.post<any>('/auth/signup', payload).then(response => response.data)
+    signup: async (payload: SignupPayload): Promise<any> => {
+        const response = await api.post<any>('/auth/signup', payload)
+        return response.data
     },
-    getCurrentUser: (): Promise<IUser> => {
-        return api.get<IUser>('/auth/me').then(response => response.data)
+    getCurrentUser: async (): Promise<IUser> => {
+        const response = await api.get<IUser>('/auth/me')
+        return response.data
     }
 }
