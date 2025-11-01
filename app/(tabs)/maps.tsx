@@ -6,6 +6,7 @@ import {
 } from "@/constants/geolocation.constants";
 import { Coord, Trip } from "@/lib/types/coord.types";
 import { deg2rad, projectAlongMeters, toXY } from "@/lib/utils";
+import { getRandomColor } from "@/lib/utils/generate-colors.utils";
 import React, { useState } from "react";
 import {
   Alert,
@@ -147,7 +148,10 @@ export default function MapsScreen() {
       return;
     }
     const id = `trip-${Date.now()}`;
-    setTrips((prev) => [...prev, { id, path: myPath }]);
+    setTrips((prev) => [
+      ...prev,
+      { id, path: myPath, color: getRandomColor() },
+    ]);
     // garder le trajet utilisateur pour recherche ultérieure
     Alert.alert("Publié", "Trajet publié sur la carte.");
   };
@@ -208,23 +212,38 @@ export default function MapsScreen() {
         toolbarEnabled={false}
       >
         {/* Trajets publiés (orange) et ceux suggérés (vert) */}
-        {trips.map((t) => {
+        {trips.map((t, index) => {
           const isSuggested = suggestedIds.has(t.id);
           return (
-            <Polyline
-              key={t.id}
-              coordinates={t.path}
-              strokeWidth={isSuggested ? 6 : 4}
-              strokeColor={
-                isSuggested
-                  ? Platform.OS === "ios"
-                    ? "green"
-                    : "#22CC66"
-                  : Platform.OS === "ios"
-                  ? "orange"
-                  : "#FF9933"
-              }
-            />
+            <>
+              <Polyline
+                key={t.id}
+                coordinates={t.path}
+                strokeWidth={isSuggested ? 6 : 4}
+                strokeColor={
+                  isSuggested
+                    ? Platform.OS === "ios"
+                      ? "green"
+                      : "#22CC66"
+                    : Platform.OS === "ios"
+                    ? "orange"
+                    : t.color
+                }
+              />
+              {/* Départ */}
+              <Marker
+                coordinate={t.path[0]}
+                title={`Départ ${index + 1}`}
+                pinColor={t.color || "orange"}
+              />
+
+              {/* Arrivée */}
+              <Marker
+                coordinate={t.path[t.path.length - 1]}
+                title={`Arrivée ${index + 1}`}
+                pinColor={t.color || "orange"}
+              />
+            </>
           );
         })}
 
