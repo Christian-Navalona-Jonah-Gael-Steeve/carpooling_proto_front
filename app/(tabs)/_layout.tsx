@@ -1,11 +1,13 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { WebSocketProvider } from "@/contexts/websocket.context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
 
 export default function TabLayout() {
   return (
     <ProtectedRoute>
-      <Tabs
+      <WebSocketProvider>
+        <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
@@ -84,6 +86,7 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+      </WebSocketProvider>
     </ProtectedRoute>
   );
 }
