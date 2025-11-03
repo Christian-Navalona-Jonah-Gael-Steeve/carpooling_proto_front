@@ -1,13 +1,9 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/auth.context';
 import { ThemedText } from '../ThemedText';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
 
-/**
- * Protected route component props
- */
 interface ProtectedRouteProps {
   children: ReactNode;
   fallback?: ReactNode;
@@ -15,7 +11,6 @@ interface ProtectedRouteProps {
 
 /**
  * Protected route component that checks authentication status
- * Redirects to auth screen if user is not authenticated
  */
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
@@ -52,9 +47,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   return <>{children}</>;
 };
 
-/**
- * Styles for the protected route component
- */
+
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,

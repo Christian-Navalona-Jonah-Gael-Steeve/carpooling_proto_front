@@ -5,13 +5,13 @@ import React, {
   useState,
   ReactNode,
 } from "react";
-import * as SecureStore from "expo-secure-store";
 import {
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
 } from "../constants/store-keys.constants";
 import { IUser } from "../lib/types/user.types";
 import { AuthServive } from "../lib/api/auth.service";
+import { storeManager } from "../lib/utils/store-manager";
 
 /**
  * Authentication context interface
@@ -40,7 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
  * Authentication provider component
- * Manages user authentication state throughout the application
+ * Manages user authentication state
  */
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<IUser | null>(null);
@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       setIsLoading(true);
-      const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      const token = await storeManager.getItem(ACCESS_TOKEN_KEY);
 
       if (token) {
         // Token exists, verify it by fetching user data
@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
         } catch (error) {
           // Token is invalid, clear it
-          console.error("Invalid token, clearing secure storage:", error);
+          console.error("Invalid token, clearing storage:", error);
           await logout();
         }
       } else {
@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
-   * Login user and store tokens securely
+   * Login user and store tokens
    * @param accessToken - JWT access token
    * @param refreshToken - JWT refresh token
    */
@@ -90,10 +90,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken: string;
   }) => {
     try {
-      // Store tokens in secure storage
       await Promise.all([
-        SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken),
-        SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken),
+        storeManager.setItem(ACCESS_TOKEN_KEY, accessToken),
+        storeManager.setItem(REFRESH_TOKEN_KEY, refreshToken),
       ]);
 
       // Fetch user data
@@ -107,14 +106,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   /**
-   * Logout user and clear all stored data from secure storage
+   * Logout user and clear all stored data
    */
   const logout = async () => {
     try {
-      // Clear tokens from secure storage
       await Promise.all([
-        SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-        SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+        storeManager.deleteItem(ACCESS_TOKEN_KEY),
+        storeManager.deleteItem(REFRESH_TOKEN_KEY),
       ]);
 
       // Reset state

@@ -1,4 +1,4 @@
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/auth.context";
 import { useSigninMutation } from "@/hooks/mutations/auth.mutations";
 import { SigninPayload } from "@/lib/types/auth.types";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";

@@ -1,9 +1,9 @@
 import axios from "axios";
-import * as SecureStore from "expo-secure-store";
 import {
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
 } from "../../../constants/store-keys.constants";
+import { storeManager } from "../../utils/store-manager";
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -29,7 +29,7 @@ api.interceptors.request.use(
     // Add authorization header if not excluded
     if (!shouldExclude) {
       try {
-        const token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+        const token = await storeManager.getItem(ACCESS_TOKEN_KEY);
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
@@ -59,7 +59,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+        const refreshToken = await storeManager.getItem(REFRESH_TOKEN_KEY);
 
         if (refreshToken) {
           // Attempt to refresh the token
@@ -71,10 +71,10 @@ api.interceptors.response.use(
           const { accessToken, refreshToken: newRefreshToken } =
             refreshResponse.data;
 
-          // Store new tokens securely
-          await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, accessToken);
+          // Store new tokens securely (platform-specific)
+          await storeManager.setItem(ACCESS_TOKEN_KEY, accessToken);
           if (newRefreshToken) {
-            await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken);
+            await storeManager.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
           }
 
           // Retry original request with new token
@@ -96,13 +96,13 @@ api.interceptors.response.use(
 );
 
 /**
- * Handles user logout by clearing stored tokens from secure storage
+ * Handles user logout by clearing stored tokens
  */
 const handleLogout = async () => {
   try {
     await Promise.all([
-      SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-      SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+      storeManager.deleteItem(ACCESS_TOKEN_KEY),
+      storeManager.deleteItem(REFRESH_TOKEN_KEY),
     ]);
   } catch (error) {
     console.error("Error during logout:", error);

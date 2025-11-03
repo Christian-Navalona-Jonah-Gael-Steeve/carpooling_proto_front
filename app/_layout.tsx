@@ -10,7 +10,7 @@ import "react-native-reanimated";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import ReactQueryProvider from "@/providers/react-query.provider";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider } from "@/contexts/auth.context";
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
