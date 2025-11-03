@@ -1,16 +1,16 @@
 import React, {
   createContext,
+  ReactNode,
   useContext,
   useEffect,
   useState,
-  ReactNode,
 } from "react";
 import {
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
 } from "../constants/store-keys.constants";
-import { IUser } from "../lib/types/user.types";
 import { AuthServive } from "../lib/api/auth.service";
+import { IUser } from "../lib/types/user.types";
 import { storeManager } from "../lib/utils/store-manager";
 
 /**
