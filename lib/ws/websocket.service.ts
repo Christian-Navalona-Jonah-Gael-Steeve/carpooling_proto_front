@@ -150,7 +150,7 @@ export class WebSocketService {
     }
 
     this.client.publish({
-      destination: '/app/dm',
+      destination: '/app/private-message',
       body: JSON.stringify(message),
     });
 
