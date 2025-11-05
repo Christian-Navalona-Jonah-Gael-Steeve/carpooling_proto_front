@@ -808,42 +808,6 @@ const styles = StyleSheet.create({
   },
   modalRow: { flexDirection: "row", gap: 10 },
 
-  rowBetween: { marginTop: 4 },
-  label: { color: "#cbd5e1", marginBottom: 6 },
-  selectRow: {
-    backgroundColor: "#0f172a",
-    padding: 8,
-    borderRadius: 10,
-    gap: 6,
-  },
-  pill: {
-    backgroundColor: "#1f2937",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginRight: 6,
-  },
-  pillActive: { backgroundColor: "#22cc66" },
-  pillTxt: { color: "#cbd5e1", fontWeight: "700" },
-  pillTxtActive: { color: "#000" },
-
-  seatRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  stepBtn: {
-    backgroundColor: "#1f2937",
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepTxt: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  seatTxt: {
-    color: "#fff",
-    fontWeight: "700",
-    minWidth: 28,
-    textAlign: "center",
-  },
-
   loadingOverlay: {
     position: "absolute",
     left: 0,
