@@ -5,7 +5,7 @@ import {
   PROXIMITY_METERS,
 } from "@/constants/geolocation.constants";
 import { useAuth } from "@/contexts/auth.context";
-import { geocode } from "@/lib/api/geocode";
+import { geocode } from "@/lib/api/geocode.service";
 import { createRideRequest } from "@/lib/api/ride-requests.services";
 import {
   LatLngDto,
