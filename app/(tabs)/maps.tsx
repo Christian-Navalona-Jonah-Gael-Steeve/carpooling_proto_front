@@ -569,6 +569,14 @@ export default function MapsScreen() {
             </React.Fragment>
           );
         })}
+
+        {role === "passenger" && end && (
+          <Marker
+            coordinate={end}
+            title="Ma destination"
+            pinColor="#FFD700" // jaune/or
+          />
+        )}
       </MapView>
 
       {/* ---- Barre actions conducteurs */}
