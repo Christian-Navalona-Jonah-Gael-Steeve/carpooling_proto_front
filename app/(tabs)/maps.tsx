@@ -2,6 +2,7 @@ import { DriverTrips } from "@/components/map/DriverTrips";
 import LoadingOverlay from "@/components/map/LoadingOverlay";
 import CloseTripModal from "@/components/map/modals/ClosetripModal";
 import { PublishTripModal } from "@/components/map/modals/PublishTripModal";
+import RoleModal from "@/components/map/modals/RoleModal";
 import {
   COVERAGE_THRESHOLD,
   INITIAL_REGION,
@@ -19,13 +20,13 @@ import {
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
+import { Role } from "@/lib/types/user.types";
 import { fmtDate, fmtTime } from "@/lib/utils/date-format";
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
-  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -35,7 +36,6 @@ import {
 } from "react-native";
 
 type RNLatLng = { latitude: number; longitude: number };
-type Role = "driver" | "passenger";
 
 const DRIVER_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -373,61 +373,13 @@ export default function MapsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ---- Modale choix rôle (si double rôle) */}
-      <Modal
+      <RoleModal
+        role={role}
         visible={roleModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRoleModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Choisir un rôle</Text>
-            <View style={styles.modalRow}>
-              <TouchableOpacity
-                style={[
-                  styles.roleBtn,
-                  role === "driver" && styles.roleBtnActive,
-                ]}
-                onPress={() => {
-                  setRole("driver");
-                  setRoleModal(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.roleTxt,
-                    role === "driver" && styles.roleTxtActive,
-                  ]}
-                >
-                  Conducteur
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleBtn,
-                  role === "passenger" && styles.roleBtnActive,
-                ]}
-                onPress={() => {
-                  setRole("passenger");
-                  setRoleModal(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.roleTxt,
-                    role === "passenger" && styles.roleTxtActive,
-                  ]}
-                >
-                  Passager
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        setRole={setRole}
+        setVisible={setRoleModal}
+      />
 
-      {/* Modale publier (sélecteurs heure/sièges) */}
       <PublishTripModal
         driverId={userId}
         end={end}
@@ -439,7 +391,6 @@ export default function MapsScreen() {
         willOverlap={willOverlap}
       />
 
-      {/* Modale fermeture trajet */}
       <CloseTripModal
         handleCloseTrip={doCloseTrip}
         focusTripPath={focusTripPath}
@@ -746,18 +697,6 @@ const styles = StyleSheet.create({
   },
   smallBtnTxt: { color: "#93c5fd", fontWeight: "700" },
 
-  roleBtn: {
-    backgroundColor: "#1f2937",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  roleBtnActive: { backgroundColor: "#22cc66" },
-  roleTxt: { color: "#cbd5e1", fontWeight: "700" },
-  roleTxtActive: { color: "#000" },
-
   sheet: {
     position: "absolute",
     left: 0,
@@ -783,24 +722,4 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sub: { color: "#cbd5e1", marginTop: 2 },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalCard: {
-    backgroundColor: "#0b1220",
-    padding: 16,
-    borderRadius: 14,
-    width: "85%",
-  },
-  modalTitle: {
-    color: "#fff",
-    fontWeight: "700",
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  modalRow: { flexDirection: "row", gap: 10 },
 });
