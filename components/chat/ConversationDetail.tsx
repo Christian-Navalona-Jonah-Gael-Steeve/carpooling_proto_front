@@ -196,6 +196,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
           }}
         />
 
+        
         {otherParticipant && (
           <ReviewSection 
             driverId={otherParticipant.uid}
