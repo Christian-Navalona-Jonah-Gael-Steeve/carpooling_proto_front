@@ -1,3 +1,4 @@
+import { Coord } from "../types/coord.types";
 import { api } from "./base/api";
 
 export type LatLngDto = { lat: number; lng: number };
@@ -62,4 +63,18 @@ export async function listTrips() {
 export async function closeTrip(id: string) {
   const { data } = await api.patch<TripResponse>(`/trips/${id}/close`, {});
   return data;
+}
+
+export async function fetchRoute(o: Coord, d: Coord): Promise<Coord[]> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${o.longitude},${o.latitude};${d.longitude},${d.latitude}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json?.routes?.[0]?.geometry?.coordinates) {
+      return json.routes[0].geometry.coordinates.map(
+        ([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })
+      );
+    }
+  } catch {}
+  return [o, d];
 }

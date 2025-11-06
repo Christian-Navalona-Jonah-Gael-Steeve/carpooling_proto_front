@@ -1,4 +1,4 @@
-import { usePublishTrip } from "@/hooks/usePublishTrip";
+import { usePublishTrip } from "@/hooks/maps/usePublishTrip";
 import { createTrip, LatLngDto, TripResponse } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
 import { toLngLatPath } from "@/lib/utils/coords.utils";
@@ -15,17 +15,24 @@ import {
 } from "react-native";
 
 interface IPublishTripModal {
+  activeTrips: TripResponse[];
   publishModal: boolean;
   driverId: string;
   start: Coord | null;
   end: Coord | null;
   myPath: Coord[];
-  willOverlap: (depISO: string, arrISO: string) => boolean;
+  willOverlap: (
+    depISO: string,
+    arrISO: string,
+    trips: TripResponse[],
+    userId: string
+  ) => boolean;
   setActiveTrips: React.Dispatch<React.SetStateAction<TripResponse[]>>;
   setPublishModal: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 export const PublishTripModal: FC<IPublishTripModal> = ({
+  activeTrips,
   driverId,
   publishModal,
   start,
@@ -61,7 +68,7 @@ export const PublishTripModal: FC<IPublishTripModal> = ({
     );
 
     // anti-chevauchement
-    if (willOverlap(depISO, arrISO)) {
+    if (willOverlap(depISO, arrISO, activeTrips, driverId)) {
       Alert.alert(
         "Conflit horaire",
         "Vous avez déjà un trajet actif qui chevauche cet intervalle. Choisissez d’autres horaires."

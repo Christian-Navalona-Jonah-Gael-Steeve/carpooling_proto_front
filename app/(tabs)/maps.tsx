@@ -9,6 +9,7 @@ import {
   PROXIMITY_METERS,
 } from "@/constants/geolocation.constants";
 import { useAuth } from "@/contexts/auth.context";
+import { useDriverMap } from "@/hooks/maps/useDriverMap";
 import { geocode } from "@/lib/api/geocode.service";
 import { createRideRequest } from "@/lib/api/ride-requests.services";
 import {
@@ -16,12 +17,14 @@ import {
   TripMatchResponse,
   TripResponse,
   closeTrip,
+  fetchRoute,
   listTrips,
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
 import { Role } from "@/lib/types/user.types";
 import { fmtDate, fmtTime } from "@/lib/utils/date-format";
+import { willOverlap } from "@/lib/utils/trip.utils";
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -41,27 +44,8 @@ const DRIVER_ID = "11111111-1111-1111-1111-111111111111";
 
 const shortId = (id?: string) => (id ? id.slice(0, 8) : "—");
 
-async function fetchRoute(o: Coord, d: Coord): Promise<Coord[]> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${o.longitude},${o.latitude};${d.longitude},${d.latitude}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json?.routes?.[0]?.geometry?.coordinates) {
-      return json.routes[0].geometry.coordinates.map(
-        ([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })
-      );
-    }
-  } catch {}
-  return [o, d];
-}
-
 export default function MapsScreen() {
   const mapRef = useRef<any>(null);
-
-  // ---- état conducteur (tracé local)
-  const [start, setStart] = useState<Coord | null>(null);
-  const [end, setEnd] = useState<Coord | null>(null);
-  const [myPath, setMyPath] = useState<Coord[]>([]);
 
   // ---- trajets BD (toujours visibles tant que non fermés)
   const [activeTrips, setActiveTrips] = useState<TripResponse[]>([]);
@@ -80,13 +64,13 @@ export default function MapsScreen() {
   // ---- recherche destination (passager)
   const [query, setQuery] = useState("");
   const [geoRes, setGeoRes] = useState<any[]>([]);
-  const [mapCenter, setMapCenter] = useState<RNLatLng>({
+  const [mapCenter, setMapCenter] = useState<Coord>({
     latitude: INITIAL_REGION.latitude,
     longitude: INITIAL_REGION.longitude,
   });
 
   const [publishModal, setPublishModal] = useState(false);
-  const [currentPos, setCurrentPos] = useState<RNLatLng | null>(null);
+  const [currentPos, setCurrentPos] = useState<Coord | null>(null);
 
   // ---- rôles
   const { user } = useAuth();
@@ -105,6 +89,13 @@ export default function MapsScreen() {
   const [roleModal, setRoleModal] = useState<boolean>(
     hasDriver && hasPassenger
   );
+
+  const { end, myPath, start, onLongPress, openPublish, setEnd, setMyPath } =
+    useDriverMap({
+      role,
+      setMatches,
+      setPublishModal,
+    });
 
   // ---- modals (publication & fermeture)
 
@@ -181,59 +172,6 @@ export default function MapsScreen() {
       }
     } catch {}
     return null;
-  };
-
-  // ---- interactions carte (driver only)
-  const onLongPress = async (e: any) => {
-    if (role === "passenger") return;
-    const c = e.nativeEvent.coordinate as RNLatLng;
-    if (!start) {
-      setStart(c);
-      setEnd(null);
-      setMyPath([]);
-      setMatches([]);
-    } else if (!end) {
-      setEnd(c);
-      const p = await fetchRoute(start, c);
-      setMyPath(p);
-      setMatches([]);
-    } else {
-      setStart(c);
-      setEnd(null);
-      setMyPath([]);
-      setMatches([]);
-    }
-  };
-
-  // ---- ouverture du popup publier (driver)
-  const openPublish = () => {
-    if (role !== "driver") return;
-    if (!start || !end || myPath.length < 2) {
-      Alert.alert(
-        "Info",
-        "Trace d’abord le départ et l’arrivée (appuis longs)."
-      );
-      return;
-    }
-    setPublishModal(true);
-  };
-
-  // ---- vérif chevauchement des trajets du même conducteur
-  const willOverlap = (depISO: string, arrISO: string) => {
-    const dep = new Date(depISO).getTime();
-    const arr = new Date(arrISO).getTime();
-    const mine = activeTrips.filter((t) => t.driver.uid === userId);
-    for (const t of mine) {
-      const tDep = t.departureAt ? new Date(t.departureAt).getTime() : NaN;
-      const tArr = (t as any).arrivalAt
-        ? new Date((t as any).arrivalAt).getTime()
-        : NaN;
-      if (!isNaN(tDep) && !isNaN(tArr)) {
-        const overlap = dep < tArr && arr > tDep;
-        if (overlap) return true;
-      }
-    }
-    return false;
   };
 
   // ---- clic sur un trajet du conducteur -> popup fermeture
@@ -407,6 +345,7 @@ export default function MapsScreen() {
       />
 
       <PublishTripModal
+        activeTrips={activeTrips}
         driverId={userId}
         end={end}
         myPath={myPath}
