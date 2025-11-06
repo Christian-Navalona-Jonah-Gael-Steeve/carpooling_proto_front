@@ -1,15 +1,15 @@
-import { useAuth } from '@/contexts/auth.context'; // Import pour récupérer l'utilisateur
+import { useAuth } from '@/contexts/auth.context';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useCreateReview, useUpdateReview } from '../../hooks/queries/review.queries';
 import { RatingStars } from './RatingStars';
@@ -35,13 +35,13 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 }) => {
   const [rating, setRating] = useState(existingReview?.rating || 0);
   const [comment, setComment] = useState(existingReview?.comment || '');
-  const { user } = useAuth(); // Récupérer l'utilisateur connecté
+  const { user } = useAuth(); 
   
   const createReviewMutation = useCreateReview();
   const updateReviewMutation = useUpdateReview();
 
   const isEditing = !!existingReview;
-  // Utiliser isPending au lieu de isLoading
+  
   const isLoading = createReviewMutation.isPending || updateReviewMutation.isPending;
 
   const handleSubmit = async () => {
@@ -63,7 +63,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
         });
       } else {
         await createReviewMutation.mutateAsync({
-          reviewerId: user.uid, // Utiliser l'UID de l'utilisateur connecté
+          reviewerId: user.uid, 
           driverId,
           rating,
           comment: comment || undefined,

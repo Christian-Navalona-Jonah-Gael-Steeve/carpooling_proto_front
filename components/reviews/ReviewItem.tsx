@@ -18,7 +18,7 @@ export const ReviewItem: React.FC<ReviewItemProps> = ({
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', {
       day: 'numeric',
-      month: 'short',
+      month: 'long',
       year: 'numeric'
     });
   };
