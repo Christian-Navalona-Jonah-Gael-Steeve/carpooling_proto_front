@@ -1,13 +1,15 @@
-import { useAuth } from '@/contexts/auth.context';
-import { useDriverRating, useDriverReviews, useUserReviewForDriver } from '@/hooks/queries/review.queries';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
+
+import { useAuth } from '@/contexts/auth.context';
+import { useDriverRating, useDriverReviews, useHasCompletedTrip, useUserReviewForDriver } from '@/hooks/queries/review.queries';
+import { Ionicons } from '@expo/vector-icons';
+
 import {
-    ActivityIndicator,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { RatingStars } from './RatingStars';
 import { ReviewItem } from './ReviewItem';
@@ -31,14 +33,15 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
   const { data: reviews, isLoading: reviewsLoading } = useDriverReviews(driverId);
   const { data: rating, isLoading: ratingLoading } = useDriverRating(driverId);
   const { data: userReview } = useUserReviewForDriver(driverId, user?.uid || '');
+  const { data: hasCompletedTrip, isLoading: tripCheckLoading } = useHasCompletedTrip(user?.uid || '', driverId);
 
-  const isLoading = reviewsLoading || ratingLoading;
+  const isLoading = reviewsLoading || ratingLoading || tripCheckLoading;
   const displayedReviews = showAllReviews ? reviews : reviews?.slice(0, compact ? 2 : 3);
 
   const canReview = user && 
                    user.uid !== driverId && 
-                   !userReview && 
-                   reviews && reviews.length > 0;
+                   !userReview &&
+                   hasCompletedTrip;
 
   if (isLoading) {
     return (
@@ -56,22 +59,40 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Avis</Text>
+          
           {user && user.uid !== driverId && (
-            <TouchableOpacity 
-              style={styles.addReviewButton}
-              onPress={() => setReviewModalVisible(true)}
-            >
-              <Ionicons name="star-outline" size={16} color="#2563EB" />
-              <Text style={styles.addReviewText}>Donner un avis</Text>
-            </TouchableOpacity>
+            hasCompletedTrip ? (
+              <TouchableOpacity 
+                style={styles.addReviewButton}
+                onPress={() => setReviewModalVisible(true)}
+              >
+                <Ionicons name="star-outline" size={16} color="#2563EB" />
+                <Text style={styles.addReviewText}>Donner un avis</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.cannotReviewBadge}>
+                <Ionicons name="time-outline" size={14} color="#6B7280" />
+                <Text style={styles.cannotReviewText}>Course requise</Text>
+              </View>
+            )
           )}
         </View>
+        
         <View style={styles.emptyState}>
           <Ionicons name="star-outline" size={40} color="#D1D5DB" />
           <Text style={styles.emptyStateTitle}>Aucun avis</Text>
           <Text style={styles.emptyStateText}>
-            Soyez le premier à donner votre avis sur {driverName}
+            {hasCompletedTrip 
+              ? `Soyez le premier à donner votre avis sur ${driverName}`
+              : `Aucun avis pour ${driverName}`
+            }
           </Text>
+          
+          {user && user.uid !== driverId && !hasCompletedTrip && (
+            <Text style={styles.infoText}>
+              Effectuez une course avec ce conducteur pour pouvoir le noter
+            </Text>
+          )}
         </View>
 
         <ReviewModal
@@ -90,9 +111,9 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
         <View style={styles.titleContainer}>
           <Text style={styles.title}>Avis</Text>
           <View style={styles.ratingSummary}>
-            <Text style={styles.averageRating}>{rating?.averageRating.toFixed(1)}</Text>
+            <Text style={styles.averageRating}>{rating?.averageRating?.toFixed(1) || '0.0'}</Text>
             <RatingStars rating={rating?.averageRating || 0} size={16} />
-            <Text style={styles.reviewCount}>({rating?.totalReviews})</Text>
+            <Text style={styles.reviewCount}>({rating?.totalReviews || 0})</Text>
           </View>
         </View>
 
@@ -112,9 +133,16 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
             <Text style={styles.userReviewedText}>Vous avez noté</Text>
           </View>
         )}
+
+        {user && user.uid !== driverId && !hasCompletedTrip && !userReview && (
+          <View style={styles.cannotReviewBadge}>
+            <Ionicons name="time-outline" size={14} color="#6B7280" />
+            <Text style={styles.cannotReviewText}>Course requise</Text>
+          </View>
+        )}
       </View>
 
-      {/* Liste avis */}
+
       {displayedReviews?.map((review) => (
         <ReviewItem 
           key={review.id} 
@@ -160,6 +188,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginVertical: 8,
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -223,6 +252,20 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontWeight: '500',
   },
+  cannotReviewBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 4,
+  },
+  cannotReviewText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -249,6 +292,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   showMoreButton: {
     flexDirection: 'row',
