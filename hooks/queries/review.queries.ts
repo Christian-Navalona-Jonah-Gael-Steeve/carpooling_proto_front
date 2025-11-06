@@ -1,5 +1,4 @@
 import { ReviewService } from '@/lib/api/review.service';
-import { hasCompletedTripWithDriver } from '@/lib/api/trips.service';
 import { UpdateReviewRequest } from '@/lib/types/review.types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -35,12 +34,23 @@ export const useUserReviewForDriver = (driverId: string, reviewerId: string) => 
     });
 };
 
-export const useHasCompletedTrip = (passengerId: string, driverId: string) => {
+/*export const useHasCompletedTrip = (passengerId: string, driverId: string) => {
     return useQuery({
         queryKey: reviewKeys.tripCheck(passengerId, driverId),
         queryFn: () => hasCompletedTripWithDriver(passengerId, driverId),
         enabled: !!passengerId && !!driverId,
         staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+};*/
+
+export const useHasCompletedTrip = (passengerId: string, driverId: string) => {
+    return useQuery({
+        queryKey: reviewKeys.tripCheck(passengerId, driverId),
+        queryFn: () => {
+            return passengerId !== driverId;
+        },
+        enabled: !!passengerId && !!driverId,
+        staleTime: 5 * 60 * 1000,
     });
 };
 

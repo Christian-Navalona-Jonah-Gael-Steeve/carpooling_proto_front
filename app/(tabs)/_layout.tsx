@@ -1,4 +1,5 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ReviewSection } from '@/components/reviews/ReviewSection';
 import { WebSocketProvider } from "@/contexts/websocket.context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
@@ -54,6 +55,12 @@ export default function TabLayout() {
               />
             ),
           }}
+        />
+
+        <ReviewSection 
+          driverId="driver123" // Mettez un UID de conducteur existant
+          driverName="Jean Dupont" // Mettez un nom fictif
+          compact={false}
         />
 
         <Tabs.Screen
