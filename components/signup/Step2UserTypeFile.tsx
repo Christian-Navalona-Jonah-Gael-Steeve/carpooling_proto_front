@@ -27,19 +27,19 @@ const Step2UserTypeAndFiles: React.FC<Props> = ({ userType, setUserType, file, s
         <TouchableOpacity
           style={[
             styles.userTypeButton,
-            userType === "passenger" && styles.userTypeButtonActive,
+            userType === "PASSENGER" && styles.userTypeButtonActive,
           ]}
-          onPress={() => setUserType("passenger")}
+          onPress={() => setUserType("PASSENGER")}
         >
           <FontAwesome5
             name="user"
             size={24}
-            color={userType === "passenger" ? "#FFFFFF" : "#6B7280"}
+            color={userType === "PASSENGER" ? "#FFFFFF" : "#6B7280"}
           />
           <Text
             style={[
               styles.userTypeText,
-              userType === "passenger" && styles.userTypeTextActive,
+              userType === "PASSENGER" && styles.userTypeTextActive,
             ]}
           >
             Passager
@@ -49,19 +49,19 @@ const Step2UserTypeAndFiles: React.FC<Props> = ({ userType, setUserType, file, s
         <TouchableOpacity
           style={[
             styles.userTypeButton,
-            userType === "driver" && styles.userTypeButtonActive,
+            userType === "DRIVER" && styles.userTypeButtonActive,
           ]}
-          onPress={() => setUserType("driver")}
+          onPress={() => setUserType("DRIVER")}
         >
           <FontAwesome5
             name="car-side"
             size={24}
-            color={userType === "driver" ? "#FFFFFF" : "#6B7280"}
+            color={userType === "DRIVER" ? "#FFFFFF" : "#6B7280"}
           />
           <Text
             style={[
               styles.userTypeText,
-              userType === "driver" && styles.userTypeTextActive,
+              userType === "DRIVER" && styles.userTypeTextActive,
             ]}
           >
             Conducteur

@@ -7,6 +7,7 @@ interface Props {
   setCode: (v: string[]) => void;
   inputs: React.MutableRefObject<Array<TextInput | null>>;
   handleCodeChange: (value: string, index: number) => void;
+  isStep3Done: boolean
 }
 
 const Step4Verification: React.FC<Props> = ({
@@ -14,6 +15,7 @@ const Step4Verification: React.FC<Props> = ({
   setCode,
   inputs,
   handleCodeChange,
+  isStep3Done
 }) => {
   const [timer, setTimer] = useState(0);
   const [isResending, setIsResending] = useState(false);
@@ -43,9 +45,15 @@ const Step4Verification: React.FC<Props> = ({
   return (
     <View style={styles.form}>
       <Text style={styles.sectionTitle}>Vérification du compte</Text>
-      <Text style={styles.subtitle}>
-        Un code de vérification à 6 chiffres a été envoyé dans votre boîte mail.
-      </Text>
+      {isStep3Done ? (
+        <Text style={[styles.subtitle, { color: "green", fontWeight: "bold" }]}>
+          Un code de vérification à 6 chiffres a été envoyé dans votre boîte mail.
+        </Text>
+      ) : (
+        <Text style={[styles.subtitle, { color: "red", fontWeight: "bold" }]}>
+          Veuillez compléter l'étape précédente avant de continuer.
+        </Text>
+      )}
 
       <TouchableOpacity onPress={handleResendCode} disabled={timer > 0 || isResending}>
         <Text
@@ -57,8 +65,8 @@ const Step4Verification: React.FC<Props> = ({
           {isResending
             ? "Envoi en cours..."
             : timer > 0
-            ? `Renvoyer dans ${timer}s`
-            : "Renvoyer le code"}
+              ? `Renvoyer dans ${timer}s`
+              : "Renvoyer le code"}
         </Text>
       </TouchableOpacity>
 

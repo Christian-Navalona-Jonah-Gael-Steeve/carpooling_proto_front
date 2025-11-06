@@ -47,11 +47,12 @@ export default function LoginScreen() {
       } catch (error) {
         console.error("Login failed:", error);
         // Handle login error (you might want to show an error message)
-      } finally { 
+      } finally {
         setLoading(false);
       }
     },
   });
+  const isFormValid = values.email.trim() !== "" && values.password.trim() !== "";
 
   return (
     <View style={styles.container}>
@@ -92,8 +93,12 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.loginButton}
+          style={[
+            styles.loginButton,
+            !isFormValid && styles.loginButtonDisabled, // style quand désactivé
+          ]}
           onPress={() => handleSubmit()}
+          disabled={!isFormValid}
         >
           <Text style={styles.loginButtonText}>{!isloading ? `Se connecter` : `Connexion . . . `}</Text>
         </TouchableOpacity>
@@ -123,6 +128,10 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: 16,
   },
+  loginButtonDisabled: {
+    backgroundColor: "#A5B4FC", // couleur plus claire pour montrer que c'est désactivé
+  },
+
   title: {
     fontSize: 24,
     fontFamily: "Inter-Bold",

@@ -1,10 +1,10 @@
 
 export type Gender = "male" | "female";
-export type UserType = "passenger" | "driver";
+export type UserType = "PASSENGER" | "DRIVER";
 
 export type FileType = {
   uri: string;
   name: string;
-  size?: number;
+  // size?: number;
   type?: string;
 };

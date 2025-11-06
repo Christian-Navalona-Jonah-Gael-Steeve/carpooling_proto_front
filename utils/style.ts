@@ -19,6 +19,10 @@ export const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#E5E7EB",
   },
+  loginButtonDisabled: {
+    backgroundColor: "#A5B4FC", // couleur plus claire pour montrer que c'est désactivé
+  },
+
   userTypeButtonActive: { backgroundColor: "#2563EB", borderColor: "#2563EB" },
   userTypeText: { fontSize: 16, fontWeight: "600", color: "#6B7280", marginTop: 8 },
   userTypeTextActive: { color: "#FFFFFF" },
