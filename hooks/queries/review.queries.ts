@@ -1,4 +1,5 @@
 import { ReviewService } from '@/lib/api/review.service';
+import { hasCompletedTripWithDriver } from '@/lib/api/trips.service';
 import { UpdateReviewRequest } from '@/lib/types/review.types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -7,6 +8,7 @@ const reviewKeys = {
     driver: (driverId: string) => [...reviewKeys.all, 'driver', driverId] as const,
     userRating: (driverId: string) => [...reviewKeys.all, 'rating', driverId] as const,
     userReview: (driverId: string, reviewerId: string) => [...reviewKeys.all, 'user', driverId, reviewerId] as const,
+    tripCheck: (passengerId: string, driverId: string) => [...reviewKeys.all, 'trip-check', passengerId, driverId] as const,
 };
 
 export const useDriverReviews = (driverId: string) => {
@@ -30,6 +32,15 @@ export const useUserReviewForDriver = (driverId: string, reviewerId: string) => 
         queryKey: reviewKeys.userReview(driverId, reviewerId),
         queryFn: () => ReviewService.getUserReviewForDriver(driverId, reviewerId),
         enabled: !!driverId && !!reviewerId,
+    });
+};
+
+export const useHasCompletedTrip = (passengerId: string, driverId: string) => {
+    return useQuery({
+        queryKey: reviewKeys.tripCheck(passengerId, driverId),
+        queryFn: () => hasCompletedTripWithDriver(passengerId, driverId),
+        enabled: !!passengerId && !!driverId,
+        staleTime: 5 * 60 * 1000, // 5 minutes
     });
 };
 
