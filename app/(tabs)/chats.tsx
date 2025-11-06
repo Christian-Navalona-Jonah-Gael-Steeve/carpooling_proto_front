@@ -10,7 +10,6 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '@/contexts/auth.context';
 import { useGetInfiniteConversations } from '@/hooks/queries/chat.queries';
@@ -168,7 +167,7 @@ export default function ChatsScreen() {
 
   // Render with animated transitions
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       {/* Conversations List - Slides left when conversation opens */}
       <Animated.View
         style={[
@@ -226,7 +225,7 @@ export default function ChatsScreen() {
           />
         </Animated.View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 

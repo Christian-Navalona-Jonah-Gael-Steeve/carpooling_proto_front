@@ -2,12 +2,15 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { WebSocketProvider } from "@/contexts/websocket.context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Tabs } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet } from "react-native";
 
 export default function TabLayout() {
   return (
     <ProtectedRoute>
       <WebSocketProvider>
-        <Tabs
+        <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
+          <Tabs
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
@@ -86,7 +89,15 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+        </SafeAreaView>
       </WebSocketProvider>
     </ProtectedRoute>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+});
