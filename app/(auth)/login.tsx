@@ -4,7 +4,7 @@ import { SigninPayload } from "@/lib/types/auth.types";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useFormik } from "formik";
-import React from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { isLoading } from "expo-font";
 
 /**
  * Login screen component with authentication integration
@@ -21,6 +22,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { mutateAsync: signin } = useSigninMutation();
   const { login } = useAuth();
+  const [isloading, setLoading] = useState(false);
 
   const { values, setFieldValue, handleSubmit } = useFormik<SigninPayload>({
     initialValues: {
@@ -29,6 +31,7 @@ export default function LoginScreen() {
     },
     enableReinitialize: true,
     onSubmit: async (payload: SigninPayload) => {
+      setLoading(true);
       try {
         // Authenticate user via API
         const response = await signin(payload);
@@ -44,9 +47,12 @@ export default function LoginScreen() {
       } catch (error) {
         console.error("Login failed:", error);
         // Handle login error (you might want to show an error message)
+      } finally {
+        setLoading(false);
       }
     },
   });
+  const isFormValid = values.email.trim() !== "" && values.password.trim() !== "";
 
   return (
     <View style={styles.container}>
@@ -87,10 +93,14 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.loginButton}
+          style={[
+            styles.loginButton,
+            !isFormValid && styles.loginButtonDisabled, // style quand désactivé
+          ]}
           onPress={() => handleSubmit()}
+          disabled={!isFormValid}
         >
-          <Text style={styles.loginButtonText}>{`Se connecter`}</Text>
+          <Text style={styles.loginButtonText}>{!isloading ? `Se connecter` : `Connexion . . . `}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push("/(auth)/signup")}>
@@ -118,6 +128,10 @@ const styles = StyleSheet.create({
   backButton: {
     marginRight: 16,
   },
+  loginButtonDisabled: {
+    backgroundColor: "#A5B4FC", // couleur plus claire pour montrer que c'est désactivé
+  },
+
   title: {
     fontSize: 24,
     fontFamily: "Inter-Bold",

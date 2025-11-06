@@ -1,24 +1,101 @@
 import { useSignupMutation } from "@/hooks/mutations/auth.mutations";
 import { SignupPayload } from "@/lib/types/auth.types";
-import Entypo from "@expo/vector-icons/Entypo";
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
 import { useFormik } from "formik";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
 import {
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
+import Entypo from "@expo/vector-icons/Entypo";
 
+import Step1PersonalInfo from "@/components/signup/Step1PersonalInfo";
+import Step2UserTypeFile from "@/components/signup/Step2UserTypeFile";
+import Step3Security from "@/components/signup/Step3Security";
+import Step4Verification from "@/components/signup/Step4Verification";
+
+import { styles } from "@/utils/style";
+import { FileType, Gender, UserType } from "@/utils/type";
+import * as FileSystem from "expo-file-system";
+
+export const sendSignup = async (url: string, payload: SignupPayload, file: FileType | null) => {
+  const formData = new FormData();
+
+  formData.append("user", JSON.stringify(payload));
+
+  if (file) {
+    let fileUri = file.uri;
+
+    // 🧩 Si c’est une URI base64, on la convertit en fichier temporaire
+    if (fileUri.startsWith("data:")) {
+      const base64 = fileUri.split(",")[1];
+      const path = FileSystem.cacheDirectory + (file.name || "photo.jpg");
+      await FileSystem.writeAsStringAsync(path, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      fileUri = path; // le remplacer par un vrai fichier local
+    }
+
+    if (file) {
+      formData.append("photo", {
+        uri: file.uri,
+        name: file.name || "photo.jpg",
+        type: file.type || "image/jpeg",
+      } as unknown as Blob);
+    }
+
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Erreur inscription: ${err}`);
+  }
+
+  return response.json();
+};
+
+export const verifyCode = async (url: string, email: string, code: string) => {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error || "Code invalide");
+  }
+
+  return response.json();
+};
+
+// === COMPOSANT PRINCIPAL ===
 export default function SignupScreen() {
   const router = useRouter();
-  const [userType, setUserType] = useState<"passenger" | "driver">("passenger");
-  const { mutateAsync: signup } = useSignupMutation();
+
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [userType, setUserType] = useState<UserType>("PASSENGER");
+  const [file, setFile] = useState<FileType | null>(null);
+  const [step, setStep] = useState(1);
+  const stepTotal = 4;
+
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const inputs = useRef<Array<TextInput | null>>([]);
+  const [is_step_3_loading, setIsStep3Loading] = useState(false);
+  const [is_step_3_done, setIsStep3Done] = useState(false);
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo en bytes
 
   const { values, setFieldValue } = useFormik<SignupPayload>({
     initialValues: {
@@ -30,275 +107,219 @@ export default function SignupScreen() {
       password: "",
       confirmPassword: "",
     },
-    enableReinitialize: true,
-    onSubmit: async (payload: SignupPayload) => {
-      await signup(payload);
-      router.replace("/(auth)/login");
-    },
+    onSubmit: () => { },
   });
+
+  // === VALIDATION PAR ÉTAPE ===
+  const isStepValid = (): boolean => {
+    switch (step) {
+      case 1:
+        return gender !== null && values.lastName.trim() !== "" && values.email.trim() !== "" && values.phoneNumber.trim() !== "";
+      case 2:
+        return userType !== null && file !== null;
+      case 3:
+        return (
+          values.password.trim() !== "" &&
+          values.confirmPassword.trim() !== "" &&
+          values.password === values.confirmPassword
+        );
+      case 4:
+        return code.join("").length === 6;
+      default:
+        return true;
+    }
+  };
+
+  // === FONCTIONS DE NAVIGATION ===
+  const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
+  const nextStep = () => setStep((prev) => Math.min(prev + 1, stepTotal));
+
+  // === PICK FICHIER ===
+  const pickFile = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        const asset = result.assets[0];
+
+        // Vérifier la taille du fichier
+        let fileSize = asset.fileSize; // Certains versions d'Expo renvoient fileSize
+        if (!fileSize && asset.uri) {
+
+          const info = await FileSystem.getInfoAsync(asset.uri);
+          const fileSize = info.exists ? info.size ?? 0 : 0;
+
+          if (fileSize > MAX_FILE_SIZE) {
+            Alert.alert(
+              "Fichier trop volumineux",
+              `Veuillez sélectionner un fichier inférieur à ${MAX_FILE_SIZE / (1024 * 1024)} Mo.`
+            );
+            return; // Empêche la suite
+          }
+        }
+
+        if (fileSize && fileSize > MAX_FILE_SIZE) {
+          Alert.alert(
+            "Fichier trop volumineux",
+            `Veuillez sélectionner un fichier inférieur à ${MAX_FILE_SIZE / (1024 * 1024)} Mo.`
+          );
+          return; // Ne pas continuer
+        }
+
+        const newFile: FileType = {
+          uri: asset.uri,
+          name: asset.fileName || "photo.jpg",
+          type: asset.mimeType || "image/jpeg",
+        };
+        setFile(newFile);
+        console.log("✅ Fichier choisi:", newFile);
+      }
+    } catch (error) {
+      console.error("Erreur lors du choix du fichier:", error);
+    }
+  };
+
+  // === SIGNUP ===
+  const handleSignup = async () => {
+    setIsStep3Loading(true);
+    try {
+      console.log("file -", file);
+      if (!gender || !userType || !file)
+        return Alert.alert("Erreur", "Veuillez compléter les étapes précédentes.");
+      if (values.password !== values.confirmPassword)
+        return Alert.alert("Erreur", "Les mots de passe ne correspondent pas.");
+      const signupPayload = { ...values, gender, userType };
+      console.log("signupPayload", signupPayload);
+      await sendSignup(`${API_BASE_URL}/auth/signup`, signupPayload, file);
+
+      console.log("ok -------------- ");
+      Alert.alert("Succès", "Inscription réussie ! Vérifiez votre email.");
+      console.log("ok -------------- ", step);
+      setStep(4);
+      console.log("ok 5-------------- ", step);
+      setIsStep3Done(true);
+      setIsStep3Loading(false);
+    } catch (err: any) {
+      setIsStep3Done(false);
+      console.error(err);
+      Alert.alert("Erreur", err.message);
+    }
+    finally {
+      setIsStep3Loading(false);
+    }
+  };
+
+  // === VERIFICATION CODE ===
+  const handleVerifyCode = async () => {
+    const codeStr = code.join("");
+    try {
+      await verifyCode(`${API_BASE_URL}/auth/verify-code`, values.email, codeStr);
+      Alert.alert("Succès", "Code vérifié ! Vous pouvez vous connecter.");
+      router.replace("/(auth)/login");
+    } catch (err: any) {
+      Alert.alert("Erreur", err.message);
+    }
+  };
+
+  // === HANDLE CODE INPUT ===
+  const handleCodeChange = (value: string, index: number) => {
+    const newCode = [...code];
+    newCode[index] = value;
+    setCode(newCode);
+    if (value && index < 5) inputs.current[index + 1]?.focus();
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.replace("/(auth)/login")}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={() => router.replace("/(auth)/login")} style={styles.backButton}>
           <Entypo name="chevron-left" size={24} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.title}>{`Créer votre compte`}</Text>
+        <Text style={styles.title}>Créer votre compte</Text>
       </View>
 
-      <View style={styles.userTypeContainer}>
-        <Text style={styles.sectionTitle}>{`Je suis`}</Text>
-        <View style={styles.userTypeButtons}>
-          <TouchableOpacity
-            style={[
-              styles.userTypeButton,
-              userType === "passenger" && styles.userTypeButtonActive,
-            ]}
-            onPress={() => setUserType("passenger")}
-          >
-            <FontAwesome5
-              name="user"
-              size={24}
-              color={userType === "passenger" ? "#FFFFFF" : "#6B7280"}
-            />
-            <Text
-              style={[
-                styles.userTypeText,
-                userType === "passenger" && styles.userTypeTextActive,
-              ]}
-            >
-              {`Passager`}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.userTypeButton,
-              userType === "driver" && styles.userTypeButtonActive,
-            ]}
-            onPress={() => setUserType("driver")}
-          >
-            <FontAwesome5
-              name="car-side"
-              size={24}
-              color={userType === "driver" ? "#FFFFFF" : "#6B7280"}
-            />
-            <Text
-              style={[
-                styles.userTypeText,
-                userType === "driver" && styles.userTypeTextActive,
-              ]}
-            >
-              {`Conducteur`}
-            </Text>
-          </TouchableOpacity>
-        </View>
+      {/* STEPPER */}
+      <View style={styles.stepper}>
+        <Text style={styles.stepText}>Étape {step} sur {stepTotal}</Text>
       </View>
 
-      <View style={styles.form}>
-        <View style={styles.inputContainer}>
-          <FontAwesome5 name="user" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder={`Nom`}
-            placeholderTextColor="#9CA3AF"
-            value={values.lastName}
-            onChangeText={(value) => setFieldValue("lastName", value)}
-          />
-        </View>
+      {/* ETAPES */}
+      {step === 1 && (
+        <Step1PersonalInfo
+          gender={gender}
+          setGender={setGender}
+          values={values}
+          setFieldValue={setFieldValue}
+        />
+      )}
 
-        <View style={styles.inputContainer}>
-          <FontAwesome5 name="user" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder={`Prénom`}
-            placeholderTextColor="#9CA3AF"
-            value={values.lastName}
-            onChangeText={(value) => setFieldValue("lastName", value)}
-          />
-        </View>
+      {step === 2 && (
+        <Step2UserTypeFile
+          userType={userType}
+          setUserType={setUserType}
+          file={file}
+          setFile={setFile}
+          pickFile={pickFile}
+        />
+      )}
 
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="mail-outline" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholderTextColor="#9CA3AF"
-            value={values.firstName}
-            onChangeText={(value) => setFieldValue("firstName", value)}
-          />
-        </View>
+      {step === 3 && (
+        <Step3Security
+          values={values}
+          setFieldValue={setFieldValue}
+        />
+      )}
 
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="phone" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder={`Numéro de téléphone`}
-            keyboardType="phone-pad"
-            placeholderTextColor="#9CA3AF"
-            value={values.phoneNumber}
-            onChangeText={(value) => setFieldValue("phoneNumber", value)}
-          />
-        </View>
+      {step === 4 && (
+        <Step4Verification
+          code={code}
+          setCode={setCode}
+          inputs={inputs}
+          handleCodeChange={handleCodeChange}
+          isStep3Done={is_step_3_done}
+        />
+      )}
 
-        <View style={styles.inputContainer}>
-          <FontAwesome5 name="id-card" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder={`Numéro de CIN`}
-            placeholderTextColor="#9CA3AF"
-            value={values.cinNumber}
-            onChangeText={(value) => setFieldValue("cinNumber", value)}
-          />
-        </View>
+      {/* NAVIGATION */}
+      <View style={styles.navigation}>
+        {step > 1 ? (
+          <TouchableOpacity onPress={prevStep} style={styles.backBtn}>
+            <Text style={{ color: "#000" }}>Retour</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 100 }} />
+        )}
 
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="lock-outline" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder={`Mot de passe`}
-            secureTextEntry
-            placeholderTextColor="#9CA3AF"
-            value={values.password}
-            onChangeText={(value) => setFieldValue("password", value)}
-          />
-        </View>
-
-        <View style={styles.inputContainer}>
-          <MaterialIcons name="lock-outline" size={20} color="#6B7280" />
-          <TextInput
-            style={styles.input}
-            placeholder={`Confirmation du mot de passe`}
-            secureTextEntry
-            placeholderTextColor="#9CA3AF"
-            value={values.confirmPassword}
-            onChangeText={(value) => setFieldValue("confirmPassword", value)}
-          />
-        </View>
-
-        <TouchableOpacity style={styles.signupButton}>
-          <Text style={styles.signupButtonText}>{`Créer`}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-          <Text style={styles.loginLink}>{`Vous avez déjà un compte ?`}</Text>
-          <Text style={styles.loginLinkBold}>{`Se connecter`} </Text>
-        </TouchableOpacity>
+        {/* Bouton suivant ou terminer */}
+        {step < stepTotal ? (
+          <TouchableOpacity
+            onPress={() => {
+              if (step === 3) handleSignup(); // Étape 3 → signup
+              else nextStep(); // Autres → suivant
+            }}
+            style={[styles.nextBtn, !isStepValid() && { backgroundColor: "#A0AEC0" }]}
+            disabled={!isStepValid()}
+          >
+            <Text style={{ color: "#fff" }}>
+              {step === 3 ? is_step_3_loading ? "En cours . . ." : "Créer le compte" : "Suivant"}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={handleVerifyCode}
+            style={[styles.finishBtn, !isStepValid() && { backgroundColor: "#A0AEC0" }]}
+            disabled={!isStepValid()}
+          >
+            <Text style={{ color: "#fff" }}>Vérifier</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  backButton: {
-    marginRight: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontFamily: "Inter-Bold",
-    color: "#111827",
-  },
-  userTypeContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 32,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: "Inter-SemiBold",
-    color: "#374151",
-    marginBottom: 16,
-  },
-  userTypeButtons: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  userTypeButton: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#E5E7EB",
-  },
-  userTypeButtonActive: {
-    backgroundColor: "#2563EB",
-    borderColor: "#2563EB",
-  },
-  userTypeText: {
-    fontSize: 16,
-    fontFamily: "Inter-SemiBold",
-    color: "#6B7280",
-    marginTop: 8,
-  },
-  userTypeTextActive: {
-    color: "#FFFFFF",
-  },
-  form: {
-    paddingHorizontal: 24,
-    gap: 16,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 16,
-    paddingLeft: 12,
-    fontSize: 16,
-    fontFamily: "Inter-Regular",
-    color: "#111827",
-  },
-  inputIcon: {
-    fontSize: 20,
-    fontFamily: "Inter-Bold",
-    color: "#6B7280",
-  },
-  signupButton: {
-    backgroundColor: "#2563EB",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  signupButtonText: {
-    fontSize: 18,
-    fontFamily: "Inter-SemiBold",
-    color: "#FFFFFF",
-  },
-  loginLink: {
-    fontSize: 16,
-    fontFamily: "Inter-Regular",
-    color: "#6B7280",
-    textAlign: "center",
-    marginTop: 24,
-  },
-  loginLinkBold: {
-    fontFamily: "Inter-SemiBold",
-    textAlign: "center",
-    color: "#2563EB",
-  },
-});
