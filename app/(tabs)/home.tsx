@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import { ReviewSection } from "@/components/reviews/ReviewSection";
 import { useAuth } from "@/contexts/auth.context";
-import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /**
  * Home screen component - protected tab screen
@@ -23,6 +24,9 @@ export default function HomeScreen() {
     }
   };
 
+  const TEST_DRIVER_ID = "abc123"; 
+  const TEST_DRIVER_NAME = "Jean Dupont"; 
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -39,6 +43,15 @@ export default function HomeScreen() {
         <Text style={styles.subtitle}>
           Vous êtes connecté à votre compte de covoiturage.
         </Text>
+
+        <View style={styles.reviewSectionContainer}>
+          <ReviewSection 
+            driverId={TEST_DRIVER_ID}
+            driverName={TEST_DRIVER_NAME}
+            compact={false}
+          />
+        </View>
+
       </View>
     </View>
   );
@@ -85,5 +98,8 @@ const styles = StyleSheet.create({
     fontFamily: "Inter-Regular",
     color: "#6B7280",
     lineHeight: 24,
+  },
+  reviewSectionContainer: {
+    marginTop: 24,
   },
 });
