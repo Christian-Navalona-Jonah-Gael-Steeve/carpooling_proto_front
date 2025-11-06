@@ -83,6 +83,7 @@ export default function MapsScreen() {
   });
 
   const [publishModal, setPublishModal] = useState(false);
+  const [currentPos, setCurrentPos] = useState<RNLatLng | null>(null);
 
   // ---- rôles
   const { user } = useAuth();
@@ -116,6 +117,22 @@ export default function MapsScreen() {
   const MapView = Maps?.default;
   const Marker = Maps?.Marker;
   const Polyline = Maps?.Polyline;
+
+  // ---- position actuelle (passager)
+  useEffect(() => {
+    let mounted = true;
+    if (role !== "passenger") return;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        const pos = await Location.getCurrentPositionAsync({});
+        if (!mounted) return;
+        setCurrentPos({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, [role]);
 
   // ---- chargement trajets actifs + polling 20s
   useEffect(() => {
@@ -301,6 +318,7 @@ export default function MapsScreen() {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
       };
+      setCurrentPos({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
 
       const res = await searchTrips({
         start: current,
@@ -610,6 +628,9 @@ export default function MapsScreen() {
 
 
 
+        {role === "passenger" && currentPos && (
+          <Marker coordinate={currentPos} title="Ma position" pinColor="#1E90FF" />
+        )}
         {role === "passenger" && end && (
           <Marker coordinate={end} title="Ma destination" pinColor="#FFD700" />
         )}
