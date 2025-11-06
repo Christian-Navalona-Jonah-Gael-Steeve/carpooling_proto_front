@@ -1,4 +1,6 @@
 import { DriverTrips } from "@/components/map/DriverTrips";
+import LoadingOverlay from "@/components/map/LoadingOverlay";
+import CloseTripModal from "@/components/map/modals/ClosetripModal";
 import { PublishTripModal } from "@/components/map/modals/PublishTripModal";
 import {
   COVERAGE_THRESHOLD,
@@ -17,11 +19,10 @@ import {
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
-import { fmtDate, fmtDateTime, fmtTime } from "@/lib/utils/date-format";
+import { fmtDate, fmtTime } from "@/lib/utils/date-format";
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -50,7 +51,7 @@ async function fetchRoute(o: Coord, d: Coord): Promise<Coord[]> {
         ([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })
       );
     }
-  } catch { }
+  } catch {}
   return [o, d];
 }
 
@@ -69,10 +70,12 @@ export default function MapsScreen() {
   const [matches, setMatches] = useState<TripMatchResponse[]>([]);
   const [showSheet, setShowSheet] = useState<boolean>(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [visibleSuggestionId, setVisibleSuggestionId] =
-    useState<string | null>(null);
-  const [visibleDriverTripId, setVisibleDriverTripId] =
-    useState<string | null>(null);
+  const [visibleSuggestionId, setVisibleSuggestionId] = useState<string | null>(
+    null
+  );
+  const [visibleDriverTripId, setVisibleDriverTripId] = useState<string | null>(
+    null
+  );
 
   // ---- recherche destination (passager)
   const [query, setQuery] = useState("");
@@ -124,7 +127,7 @@ export default function MapsScreen() {
       try {
         const list = await listTrips();
         if (mounted) setActiveTrips(list);
-      } catch { }
+      } catch {}
     };
     pull();
     const id = setInterval(pull, 20000);
@@ -154,7 +157,7 @@ export default function MapsScreen() {
         }
         return dest;
       }
-    } catch { }
+    } catch {}
     return null;
   };
 
@@ -255,7 +258,7 @@ export default function MapsScreen() {
         edgePadding: { top: 80, left: 50, right: 50, bottom: 120 },
         animated: true,
       });
-    } catch { }
+    } catch {}
   };
 
   // focus trajet conducteur (isole le trajet)
@@ -266,7 +269,6 @@ export default function MapsScreen() {
 
   // find suggestions (passager)
   const findSuggestions = async () => {
-    // N’autoriser la recherche que si destination fixée OU au moins 3 lettres tapées
     let targetEnd: RNLatLng | null = end;
     if (!targetEnd) {
       if ((query || "").trim().length < 3) {
@@ -438,41 +440,12 @@ export default function MapsScreen() {
       />
 
       {/* Modale fermeture trajet */}
-      <Modal
-        visible={!!closeModalTrip}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCloseModalTrip(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Fermer ce trajet ?</Text>
-            <Text style={styles.sub}>
-              Départ {fmtDateTime(closeModalTrip?.departureAt)}
-              {(closeModalTrip as any)?.arrivalAt
-                ? ` • Arrivée ${fmtTime((closeModalTrip as any).arrivalAt)}`
-                : ""}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-              <TouchableOpacity
-                style={[styles.closeBtn, { flex: 1 }]}
-                onPress={doCloseTrip}
-              >
-                <Text style={styles.closeBtnTxt}>Fermer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.publishBtn, { flex: 1 }]}
-                onPress={() => {
-                  if (closeModalTrip) focusTripPath(closeModalTrip);
-                  setCloseModalTrip(null);
-                }}
-              >
-                <Text style={{ color: "#000", fontWeight: "700" }}>Voir</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CloseTripModal
+        handleCloseTrip={doCloseTrip}
+        focusTripPath={focusTripPath}
+        closeModalTrip={closeModalTrip}
+        setCloseModalTrip={setCloseModalTrip}
+      />
 
       {/* ---- Barre de recherche (passager) */}
       <View style={styles.searchRow}>
@@ -532,7 +505,6 @@ export default function MapsScreen() {
           setMapCenter({ latitude: r.latitude, longitude: r.longitude })
         }
       >
-
         {role === "driver" &&
           visibleOwnTrips.map((t) => {
             const first = t.path[0];
@@ -608,8 +580,6 @@ export default function MapsScreen() {
           );
         })}
 
-
-
         {role === "passenger" && end && (
           <Marker coordinate={end} title="Ma destination" pinColor="#FFD700" />
         )}
@@ -662,7 +632,10 @@ export default function MapsScreen() {
                     }}
                   >
                     <Text style={styles.sub}>Conducteur : {driverName}</Text>
-                    <TouchableOpacity style={styles.smallBtn} onPress={() => { }}>
+                    <TouchableOpacity
+                      style={styles.smallBtn}
+                      onPress={() => {}}
+                    >
                       <Text style={styles.smallBtnTxt}>Avis</Text>
                     </TouchableOpacity>
                   </View>
@@ -686,9 +659,11 @@ export default function MapsScreen() {
                         focusTripPath(item.trip);
                       }}
                     >
-                      <Text style={{ color: "#000", fontWeight: "700" }}>👁️</Text>
+                      <Text style={{ color: "#000", fontWeight: "700" }}>
+                        👁️
+                      </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.chatBtn} onPress={() => { }}>
+                    <TouchableOpacity style={styles.chatBtn} onPress={() => {}}>
                       <Text style={{ color: "#000", fontWeight: "700" }}>
                         ✉️
                       </Text>
@@ -709,13 +684,7 @@ export default function MapsScreen() {
         </View>
       )}
 
-      {/* ---- Overlay chargement */}
-      {isSearching && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" />
-          <Text style={{ color: "#fff", marginTop: 8 }}>Recherche…</Text>
-        </View>
-      )}
+      {isSearching && <LoadingOverlay />}
     </View>
   );
 }
@@ -765,23 +734,10 @@ const styles = StyleSheet.create({
   },
   row: { paddingVertical: 8 },
 
-  publishBtn: {
-    backgroundColor: "#22cc66",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
   viewBtn: { backgroundColor: "#93c5fd", padding: 10, borderRadius: 10 },
   ask: { backgroundColor: "#22cc66", padding: 10, borderRadius: 10 },
   chatBtn: { backgroundColor: "#fbbf24", padding: 10, borderRadius: 10 },
-  closeBtn: {
-    backgroundColor: "#ef4444",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  closeBtnTxt: { color: "#fff", fontWeight: "700" },
+
   smallBtn: {
     backgroundColor: "#1f2937",
     paddingHorizontal: 10,
@@ -840,12 +796,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     width: "85%",
   },
-  publishCard: {
-    backgroundColor: "#0b1220",
-    padding: 16,
-    borderRadius: 14,
-    width: "92%",
-  },
   modalTitle: {
     color: "#fff",
     fontWeight: "700",
@@ -853,15 +803,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   modalRow: { flexDirection: "row", gap: 10 },
-
-  loadingOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: 0,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });
