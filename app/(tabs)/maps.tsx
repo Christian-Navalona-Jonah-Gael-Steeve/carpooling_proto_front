@@ -50,7 +50,7 @@ async function fetchRoute(o: Coord, d: Coord): Promise<Coord[]> {
         ([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })
       );
     }
-  } catch {}
+  } catch { }
   return [o, d];
 }
 
@@ -69,6 +69,10 @@ export default function MapsScreen() {
   const [matches, setMatches] = useState<TripMatchResponse[]>([]);
   const [showSheet, setShowSheet] = useState<boolean>(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [visibleSuggestionId, setVisibleSuggestionId] =
+    useState<string | null>(null);
+  const [visibleDriverTripId, setVisibleDriverTripId] =
+    useState<string | null>(null);
 
   // ---- recherche destination (passager)
   const [query, setQuery] = useState("");
@@ -85,7 +89,7 @@ export default function MapsScreen() {
   const userId = user?.uid ?? DRIVER_ID;
   const userRoles: string[] = Array.isArray((user as any)?.roles)
     ? ((user as any).roles as string[])
-    : []; // p.ex. ["DRIVER","PASSENGER"]
+    : [];
   const hasDriver = userRoles.includes("DRIVER");
   const hasPassenger = userRoles.includes("PASSENGER");
 
@@ -120,7 +124,7 @@ export default function MapsScreen() {
       try {
         const list = await listTrips();
         if (mounted) setActiveTrips(list);
-      } catch {}
+      } catch { }
     };
     pull();
     const id = setInterval(pull, 20000);
@@ -134,7 +138,7 @@ export default function MapsScreen() {
   const confirmDestinationFromQuery = async (): Promise<RNLatLng | null> => {
     if (end) return end;
     const q = (query || "").trim();
-    if (q.length < 3) return null; // <= ne géocode pas si pas assez de lettres
+    if (q.length < 3) return null;
     try {
       const results = await geocode(q);
       if (results && results.length > 0) {
@@ -150,13 +154,13 @@ export default function MapsScreen() {
         }
         return dest;
       }
-    } catch {}
+    } catch { }
     return null;
   };
 
   // ---- interactions carte (driver only)
   const onLongPress = async (e: any) => {
-    if (role === "passenger") return; // un passager ne trace pas
+    if (role === "passenger") return;
     const c = e.nativeEvent.coordinate as RNLatLng;
     if (!start) {
       setStart(c);
@@ -251,7 +255,13 @@ export default function MapsScreen() {
         edgePadding: { top: 80, left: 50, right: 50, bottom: 120 },
         animated: true,
       });
-    } catch {}
+    } catch { }
+  };
+
+  // focus trajet conducteur (isole le trajet)
+  const focusOwnTripPath = (trip: TripResponse) => {
+    setVisibleDriverTripId(trip.id);
+    focusTripPath(trip);
   };
 
   // find suggestions (passager)
@@ -302,6 +312,7 @@ export default function MapsScreen() {
       } as any);
 
       setMatches(res);
+      setVisibleSuggestionId(res && res.length > 0 ? res[0].trip.id : null);
       setShowSheet(true);
 
       if (!res || res.length === 0) {
@@ -351,6 +362,12 @@ export default function MapsScreen() {
   }
 
   const ownActiveTrips = activeTrips.filter((t) => t.driver.uid === userId);
+  const visibleMatches = visibleSuggestionId
+    ? matches.filter((m) => m.trip.id === visibleSuggestionId)
+    : matches;
+  const visibleOwnTrips = visibleDriverTripId
+    ? ownActiveTrips.filter((t) => t.id === visibleDriverTripId)
+    : ownActiveTrips;
 
   return (
     <View style={styles.container}>
@@ -515,38 +532,39 @@ export default function MapsScreen() {
           setMapCenter({ latitude: r.latitude, longitude: r.longitude })
         }
       >
-        {/* Trajets actifs BD (cliquables pour fermeture si owner) + points start/end */}
-        {activeTrips.map((t) => {
-          const first = t.path[0];
-          const last = t.path[t.path.length - 1];
-          const isMine = t.driver.uid === userId;
-          return (
-            <React.Fragment key={`active-${t.id}`}>
-              <Polyline
-                coordinates={t.path.map((p) => ({
-                  latitude: p.lat,
-                  longitude: p.lng,
-                }))}
-                strokeWidth={isMine ? 4 : 3}
-                onPress={() => isMine && onOwnTripPress(t)}
-              />
-              {!!first && (
-                <Marker
-                  coordinate={{ latitude: first.lat, longitude: first.lng }}
-                  title="Départ"
-                  pinColor="green"
+
+        {role === "driver" &&
+          visibleOwnTrips.map((t) => {
+            const first = t.path[0];
+            const last = t.path[t.path.length - 1];
+            const isMine = true;
+            return (
+              <React.Fragment key={`active-${t.id}`}>
+                <Polyline
+                  coordinates={t.path.map((p) => ({
+                    latitude: p.lat,
+                    longitude: p.lng,
+                  }))}
+                  strokeWidth={isMine ? 4 : 3}
+                  onPress={() => onOwnTripPress(t)}
                 />
-              )}
-              {!!last && (
-                <Marker
-                  coordinate={{ latitude: last.lat, longitude: last.lng }}
-                  title="Arrivée"
-                  pinColor="red"
-                />
-              )}
-            </React.Fragment>
-          );
-        })}
+                {!!first && (
+                  <Marker
+                    coordinate={{ latitude: first.lat, longitude: first.lng }}
+                    title="Départ"
+                    pinColor="green"
+                  />
+                )}
+                {!!last && (
+                  <Marker
+                    coordinate={{ latitude: last.lat, longitude: last.lng }}
+                    title="Arrivée"
+                    pinColor="red"
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
 
         {/* Mon tracé local (driver only) */}
         {role === "driver" && myPath.length > 1 && (
@@ -560,7 +578,7 @@ export default function MapsScreen() {
         )}
 
         {/* Suggestions (surcouche) + points start/end */}
-        {matches.map((m) => {
+        {visibleMatches.map((m) => {
           const first = m.trip.path[0];
           const last = m.trip.path[m.trip.path.length - 1];
           return (
@@ -590,6 +608,8 @@ export default function MapsScreen() {
           );
         })}
 
+
+
         {role === "passenger" && end && (
           <Marker coordinate={end} title="Ma destination" pinColor="#FFD700" />
         )}
@@ -599,7 +619,7 @@ export default function MapsScreen() {
       {role === "driver" && (
         <DriverTrips
           ownActiveTrips={ownActiveTrips}
-          focusTripPath={focusTripPath}
+          focusTripPath={focusOwnTripPath}
           openPublish={openPublish}
           onOwnTripPress={onOwnTripPress}
         />
@@ -633,8 +653,19 @@ export default function MapsScreen() {
                 shortId(item.trip.driver.uid);
               return (
                 <View style={styles.card}>
-                  {/* plus de title, on affiche conducteur + horaires */}
-                  <Text style={styles.sub}>Conducteur : {driverName}</Text>
+                  {/* conducteur + avis bouton */}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text style={styles.sub}>Conducteur : {driverName}</Text>
+                    <TouchableOpacity style={styles.smallBtn} onPress={() => { }}>
+                      <Text style={styles.smallBtnTxt}>Avis</Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.sub}>
                     Départ : {fmtDate(item.trip.departureAt)} •{" "}
                     {fmtTime(item.trip.departureAt)}
@@ -650,10 +681,16 @@ export default function MapsScreen() {
                   <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
                     <TouchableOpacity
                       style={styles.viewBtn}
-                      onPress={() => focusTripPath(item.trip)}
+                      onPress={() => {
+                        setVisibleSuggestionId(item.trip.id);
+                        focusTripPath(item.trip);
+                      }}
                     >
+                      <Text style={{ color: "#000", fontWeight: "700" }}>👁️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.chatBtn} onPress={() => { }}>
                       <Text style={{ color: "#000", fontWeight: "700" }}>
-                        Voir
+                        ✉️
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -736,6 +773,8 @@ const styles = StyleSheet.create({
   },
 
   viewBtn: { backgroundColor: "#93c5fd", padding: 10, borderRadius: 10 },
+  ask: { backgroundColor: "#22cc66", padding: 10, borderRadius: 10 },
+  chatBtn: { backgroundColor: "#fbbf24", padding: 10, borderRadius: 10 },
   closeBtn: {
     backgroundColor: "#ef4444",
     paddingHorizontal: 10,
@@ -743,6 +782,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   closeBtnTxt: { color: "#fff", fontWeight: "700" },
+  smallBtn: {
+    backgroundColor: "#1f2937",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  smallBtnTxt: { color: "#93c5fd", fontWeight: "700" },
 
   roleBtn: {
     backgroundColor: "#1f2937",

@@ -52,7 +52,7 @@ export const DriverTrips: FC<IDriverTripsProps> = ({
                     onPress={() => focusTripPath(t)}
                   >
                     <Text style={{ color: "#000", fontWeight: "700" }}>
-                      Voir
+                      👁️
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
