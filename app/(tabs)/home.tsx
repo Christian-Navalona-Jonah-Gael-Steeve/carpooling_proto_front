@@ -1,8 +1,9 @@
-import { StyleSheet, Text, View, TouchableOpacity, Modal } from "react-native";
+import { ReviewSection } from "@/components/reviews/ReviewSection";
 import { useAuth } from "@/contexts/auth.context";
-import { useRouter } from "expo-router";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useRouter } from "expo-router";
 import { useState } from "react";
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 /**
  * Home screen component - protected tab screen
@@ -24,6 +25,9 @@ export default function HomeScreen() {
       console.error('Logout failed:', error);
     }
   };
+
+  const TEST_DRIVER_ID = "abc123"; 
+  const TEST_DRIVER_NAME = "Jean Dupont"; 
 
   const logoutModal = () => {
     setShowLogoutModal(true);
@@ -49,6 +53,15 @@ export default function HomeScreen() {
         <Text style={styles.subtitle}>
           Vous êtes connecté à votre compte de covoiturage.
         </Text>
+
+        <View style={styles.reviewSectionContainer}>
+          <ReviewSection 
+            driverId={TEST_DRIVER_ID}
+            driverName={TEST_DRIVER_NAME}
+            compact={false}
+          />
+        </View>
+
       </View>
       {/* MODAL DE CONFIRMATION */}
       <Modal
@@ -118,6 +131,9 @@ const styles = StyleSheet.create({
     fontFamily: "Inter-Regular",
     color: "#6B7280",
     lineHeight: 24,
+  },
+  reviewSectionContainer: {
+    marginTop: 24,
   },
 
 
