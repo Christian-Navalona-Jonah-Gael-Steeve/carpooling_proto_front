@@ -1,27 +1,28 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { DateSeparator } from "@/components/chat/DateSeparator";
+import { MessageInput } from "@/components/chat/MessageInput";
+import { MessageItem } from "@/components/chat/MessageItem";
 import { useAuth } from "@/contexts/auth.context";
 import {
-  useGetInfiniteConversationMessages,
   useGetConversation,
+  useGetInfiniteConversationMessages,
 } from "@/hooks/queries/chat.queries";
 import { useChatManager } from "@/hooks/useChatManager";
-import { MessageItem } from "@/components/chat/MessageItem";
-import { MessageInput } from "@/components/chat/MessageInput";
-import { DateSeparator } from "@/components/chat/DateSeparator";
 import { IConversationMessage } from "@/lib/types/conversation.types";
 import { isDifferentDay } from "@/lib/utils/date.utils";
 import { getParticipantDisplayName } from "@/lib/utils/participant.utils";
+import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { ReviewSection } from "../reviews/ReviewSection";
 
 interface ConversationDetailProps {
   conversationId: number;
@@ -267,6 +268,14 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
             autoscrollToTopThreshold: 10,
           }}
         />
+
+        {otherParticipant && (
+          <ReviewSection
+            driverId={otherParticipant.uid}
+            driverName={otherParticipant.firstName + ' ' + otherParticipant.lastName}
+            compact={true}
+          />
+        )}
 
         {/* Message input */}
         <MessageInput
