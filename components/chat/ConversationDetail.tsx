@@ -1,21 +1,22 @@
+import { MessageInput } from '@/components/chat/MessageInput';
+import { MessageItem } from '@/components/chat/MessageItem';
+import { ReviewSection } from '@/components/reviews/ReviewSection';
+import { useAuth } from '@/contexts/auth.context';
+import { useGetConversation, useGetInfiniteConversationMessages } from '@/hooks/queries/chat.queries';
+import { useChatManager } from '@/hooks/useChatManager';
+import { IConversationMessage } from '@/lib/types/conversation.types';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
   ActivityIndicator,
-  TouchableOpacity,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '@/contexts/auth.context';
-import { useGetInfiniteConversationMessages, useGetConversation } from '@/hooks/queries/chat.queries';
-import { useChatManager } from '@/hooks/useChatManager';
-import { MessageItem } from '@/components/chat/MessageItem';
-import { MessageInput } from '@/components/chat/MessageInput';
-import { IConversationMessage } from '@/lib/types/conversation.types';
 
 interface ConversationDetailProps {
   conversationId: number;
@@ -194,6 +195,14 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
             autoscrollToTopThreshold: 10,
           }}
         />
+
+        {otherParticipant && (
+          <ReviewSection 
+            driverId={otherParticipant.uid}
+            driverName={otherParticipant.firstName + ' ' + otherParticipant.lastName}
+            compact={true}
+          />
+        )}
 
         {/* Message input */}
         <MessageInput onSend={handleSend} disabled={!isConnected || !otherParticipant} />
