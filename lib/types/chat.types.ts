@@ -11,6 +11,8 @@ export interface IPrivateMessagePayload {
   deliveredAt?: string;
   readAt?: string;
   status: MessageStatus;
+  isPending?: boolean;
+  isFailed?: boolean;
 }
 
 export interface MessageAckPayload {

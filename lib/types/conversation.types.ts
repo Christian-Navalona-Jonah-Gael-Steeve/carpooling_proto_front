@@ -31,6 +31,8 @@ export interface IConversationMessage {
   deliveredAt?: string;
   readAt?: string;
   status: MessageStatus;
+  isPending?: boolean;
+  isFailed?: boolean;
 }
 
 export interface ConversationQueryParams {

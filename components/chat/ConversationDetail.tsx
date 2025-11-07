@@ -27,7 +27,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   onBack,
 }) => {
   const { user } = useAuth();
-  const { sendMessage, markAsRead, isConnected } = useChatManager();
+  const { sendMessage, markAsRead, isConnected, retryMessage } = useChatManager();
   const flatListRef = useRef<FlatList>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
@@ -44,10 +44,8 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     isFetchingNextPage,
   } = useGetInfiniteConversationMessages(conversationId);
 
-  // Flatten and reverse messages (newest first -> oldest first for chat display)
   const messages = messagesData?.pages.flat().reverse() || [];
 
-  // Get other participant
   const otherParticipant = conversation?.participants.find((p) => p.uid !== user?.uid);
 
   // Scroll to bottom on initial load
@@ -76,35 +74,45 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     }
   }, [conversationId, messages.length, user, markAsRead, messages]);
 
-  // Handle send message
   const handleSend = (content: string) => {
     if (!otherParticipant || !conversationId) return;
 
     sendMessage(otherParticipant.uid, content, conversationId);
 
-    // Scroll to bottom after sending
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
   };
 
-  // Handle load more (older messages)
   const handleLoadMore = () => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   };
 
-  // Render message item
+  const handleRetry = (message: IConversationMessage) => {
+    retryMessage(message);
+
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
   const renderItem = ({ item, index }: { item: IConversationMessage; index: number }) => {
     const isCurrentUser = item.sender.uid === user?.uid;
     const previousMessage = index > 0 ? messages[index - 1] : null;
     const showSender = !isCurrentUser && (!previousMessage || previousMessage.sender.uid !== item.sender.uid);
 
-    return <MessageItem message={item} isCurrentUser={isCurrentUser} showSender={showSender} />;
+    return (
+      <MessageItem
+        message={item}
+        isCurrentUser={isCurrentUser}
+        showSender={showSender}
+        onRetry={handleRetry}
+      />
+    );
   };
 
-  // Render header
   const renderHeader = () => {
     if (!isFetchingNextPage) return null;
 
@@ -115,7 +123,6 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     );
   };
 
-  // Render empty state
   const renderEmpty = () => {
     if (isLoading) {
       return (
