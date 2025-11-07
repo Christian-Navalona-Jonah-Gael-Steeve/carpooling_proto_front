@@ -31,6 +31,7 @@ import {
   addPendingMessage,
   findPendingMessageByContent,
   generateClientId,
+  generateOptimisticId,
 } from "./chat-helpers";
 
 /**
@@ -212,7 +213,7 @@ export const useChatManager = () => {
       );
 
       const newOptimisticMessage: IConversationMessage = {
-        id: -Date.now(),
+        id: generateOptimisticId(),
         conversationId: failedMessage.conversationId,
         sender: {
           uid: user.uid,

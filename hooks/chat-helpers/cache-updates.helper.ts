@@ -6,6 +6,7 @@ import {
 } from "@/lib/types/chat.types";
 import { CONVERSATION_KEY } from "@/constants/query-keys.constants";
 import { MessageStatus } from "@/lib/enums/message.enum";
+import { generateOptimisticId } from "./message-lifecycle.helper";
 
 /**
  * Helper functions for updating the React Query cache with message changes.
@@ -34,7 +35,7 @@ export const addOptimisticMessage = (
     if (!old) return old;
 
     const optimisticMessage: IConversationMessage = {
-      id: -Date.now(), // Temporary negative ID
+      id: generateOptimisticId(),
       conversationId,
       sender: {
         uid: user.uid,
@@ -156,7 +157,19 @@ export const replaceFailedMessage = (
       return filtered;
     });
 
-    return { ...old, pages: updatedPages };
+    // Deduplicate to ensure no duplicates
+    const seenIds = new Set<number>();
+    const deduplicatedPages = updatedPages.map((page) => {
+      return page.filter((msg) => {
+        if (seenIds.has(msg.id)) {
+          return false;
+        }
+        seenIds.add(msg.id);
+        return true;
+      });
+    });
+
+    return { ...old, pages: deduplicatedPages };
   });
 };
 
@@ -251,7 +264,20 @@ export const addRealMessage = (
     // Add the real message to the first page
     updatedPages[0] = [newMessage, ...updatedPages[0]];
 
-    return { ...old, pages: updatedPages };
+    // Final deduplication pass to ensure no duplicates across pages
+    const seenIds = new Set<number>();
+    const deduplicatedPages = updatedPages.map((page) => {
+      return page.filter((msg) => {
+        if (seenIds.has(msg.id)) {
+          console.log("[Cache Helper] Removing duplicate message:", msg.id);
+          return false;
+        }
+        seenIds.add(msg.id);
+        return true;
+      });
+    });
+
+    return { ...old, pages: deduplicatedPages };
   });
 };
 

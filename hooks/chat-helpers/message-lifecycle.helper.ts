@@ -115,3 +115,13 @@ export const findPendingMessageByContent = (
 export const generateClientId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
+
+/**
+ * Generates a unique temporary ID for optimistic messages.
+ * Uses a negative number combining timestamp and random value to ensure uniqueness.
+ *
+ * @returns Unique temporary negative ID
+ */
+export const generateOptimisticId = (): number => {
+  return -(Date.now() * 1000 + Math.floor(Math.random() * 1000));
+};

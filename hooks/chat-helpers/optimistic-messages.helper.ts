@@ -80,7 +80,19 @@ export const mergeOptimisticMessages = (
     const updatedPages = [...old.pages];
     updatedPages[0] = [...newOptimisticMsgs, ...updatedPages[0]];
 
-    return { ...old, pages: updatedPages };
+    // Deduplicate all pages to ensure no duplicates
+    const seenIds = new Set<number>();
+    const deduplicatedPages = updatedPages.map((page) => {
+      return page.filter((msg) => {
+        if (seenIds.has(msg.id)) {
+          return false;
+        }
+        seenIds.add(msg.id);
+        return true;
+      });
+    });
+
+    return { ...old, pages: deduplicatedPages };
   });
 };
 

@@ -57,9 +57,9 @@ export const useGetInfiniteConversationMessages = (conversationId: number | null
     },
     initialPageParam: 0,
     enabled: !!conversationId,
-    staleTime: 0, // Data is immediately stale
-    refetchOnMount: 'always', // Always refetch on mount
-    refetchOnWindowFocus: true, // Refetch when window gets focus
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 };
 
