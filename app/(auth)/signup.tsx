@@ -123,16 +123,16 @@ export default function SignupScreen() {
 
   const { values, setFieldValue } = useFormik<SignupPayload>({
     initialValues: {
-      firstName: "Jonah",
-      lastName: "jonaha",
-      email: "jonahrafit.ram@hotmail.com",
-      address: "123 rue de Paris",
-      codePostal: "75001",
-      city: "Paris",
-      phoneNumber: "+261332123456",
-      cinNumber: "1234567890123",
-      password: "123456",
-      confirmPassword: "123456",
+      firstName: "",
+      lastName: "",
+      email: "",
+      address: "",
+      codePostal: "",
+      city: "",
+      phoneNumber: "",
+      cinNumber: "",
+      password: "",
+      confirmPassword: "",
     },
     onSubmit: () => { },
   });
