@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { IConversation } from '@/lib/types/conversation.types';
 import { Ionicons } from '@expo/vector-icons';
 import { MessageStatus } from '@/lib/enums/message.enum';
+import { getParticipantDisplayName, getParticipantInitials } from '@/lib/utils/participant.utils';
 
 interface ConversationListItemProps {
   conversation: IConversation;
@@ -80,7 +81,7 @@ export const ConversationListItem: React.FC<ConversationListItemProps> = ({
       <View style={styles.avatarContainer}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {otherUser?.firstName?.charAt(0) || otherUser?.email?.charAt(0) || '?'}
+            {getParticipantInitials(otherUser)}
           </Text>
         </View>
       </View>
@@ -88,9 +89,7 @@ export const ConversationListItem: React.FC<ConversationListItemProps> = ({
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.name} numberOfLines={1}>
-            {otherUser?.firstName && otherUser?.lastName
-              ? `${otherUser.firstName} ${otherUser.lastName}`
-              : otherUser?.email || 'Utilisateur'}
+            {getParticipantDisplayName(otherUser)}
           </Text>
           {conversation.lastMessageAt && (
             <Text style={styles.time}>{formatTime(conversation.lastMessageAt)}</Text>

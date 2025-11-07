@@ -21,6 +21,7 @@ import { MessageInput } from "@/components/chat/MessageInput";
 import { DateSeparator } from "@/components/chat/DateSeparator";
 import { IConversationMessage } from "@/lib/types/conversation.types";
 import { isDifferentDay } from "@/lib/utils/date.utils";
+import { getParticipantDisplayName } from "@/lib/utils/participant.utils";
 
 interface ConversationDetailProps {
   conversationId: number;
@@ -207,9 +208,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {otherParticipant?.firstName && otherParticipant?.lastName
-              ? `${otherParticipant.firstName} ${otherParticipant.lastName}`
-              : otherParticipant?.email || "Conversation"}
+            {getParticipantDisplayName(otherParticipant)}
           </Text>
           <View style={styles.statusContainer}>
             <View
@@ -224,9 +223,24 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
           </View>
         </View>
 
-        <TouchableOpacity style={styles.menuButton}>
-          <Ionicons name="ellipsis-vertical" size={24} color="#111827" />
-        </TouchableOpacity>
+        <View style={styles.callButtons}>
+          <TouchableOpacity
+            style={styles.callButton}
+            onPress={() => {/* audio call action */}}
+            accessibilityLabel={`Call ${getParticipantDisplayName(otherParticipant)}`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="call-outline" size={20} color="#2563EB" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.callButton}
+            onPress={() => {/* video call action */}}
+            accessibilityLabel={`Video call ${getParticipantDisplayName(otherParticipant)}`}
+            accessibilityRole="button"
+          >
+            <Ionicons name="videocam-outline" size={20} color="#2563EB" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Messages list */}
@@ -309,8 +323,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
   },
-  menuButton: {
-    padding: 8,
+  callButtons: {
+    flexDirection: "row",
+    gap: 16,
+  },
+  callButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
     flex: 1,
