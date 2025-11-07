@@ -11,6 +11,9 @@ export interface SignupPayload {
     cinNumber: string
     password: string
     confirmPassword: string
+    city: string
+    address: string
+    codePostal: string
 }
 
 export interface AuthResponse {
