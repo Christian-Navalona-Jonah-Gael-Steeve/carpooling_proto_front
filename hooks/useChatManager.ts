@@ -32,7 +32,7 @@ import {
   findPendingMessageByContent,
   generateClientId,
   generateOptimisticId,
-} from "./chat-helpers";
+} from "../helpers/chat-helpers";
 
 /**
  * Chat Manager Hook

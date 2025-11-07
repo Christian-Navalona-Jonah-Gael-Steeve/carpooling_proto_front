@@ -233,7 +233,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
       <KeyboardAvoidingView
         style={styles.content}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
         <FlatList
           ref={flatListRef}
@@ -317,6 +317,7 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     paddingVertical: 16,
+    paddingBottom: 16,
   },
   emptyList: {
     flex: 1,
