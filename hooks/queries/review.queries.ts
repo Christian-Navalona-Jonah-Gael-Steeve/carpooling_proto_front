@@ -34,14 +34,7 @@ export const useUserReviewForDriver = (driverId: string, reviewerId: string) => 
     });
 };
 
-/*export const useHasCompletedTrip = (passengerId: string, driverId: string) => {
-    return useQuery({
-        queryKey: reviewKeys.tripCheck(passengerId, driverId),
-        queryFn: () => hasCompletedTripWithDriver(passengerId, driverId),
-        enabled: !!passengerId && !!driverId,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-    });
-};*/
+
 
 export const useHasCompletedTrip = (passengerId: string, driverId: string) => {
     return useQuery({
@@ -60,6 +53,7 @@ export const useCreateReview = () => {
     return useMutation({
         mutationFn: ReviewService.createReview,
         onSuccess: (data, variables) => {
+            // Invalider les requêtes concernées
             queryClient.invalidateQueries({ 
                 queryKey: reviewKeys.driver(variables.driverId) 
             });
@@ -70,35 +64,29 @@ export const useCreateReview = () => {
                 queryKey: reviewKeys.userReview(variables.driverId, variables.reviewerId) 
             });
         },
+        onError: (error: Error) => {
+            console.error('Erreur création review:', error);
+        }
     });
 };
 
 export const useUpdateReview = () => {
-    const queryClient = useQueryClient();
-    
-    return useMutation({
-        mutationFn: ({ reviewId, data }: { reviewId: number; data: UpdateReviewRequest }) =>
-            ReviewService.updateReview(reviewId, data),
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({ 
-                queryKey: reviewKeys.driver(data.driverId) 
-            });
-            queryClient.invalidateQueries({ 
-                queryKey: reviewKeys.userRating(data.driverId) 
-            });
-        },
-    });
-};
+  const queryClient = useQueryClient();
 
-export const useDeleteReview = () => {
-    const queryClient = useQueryClient();
-    
-    return useMutation({
-        mutationFn: ReviewService.deleteReview,
-        onSuccess: (_, reviewId) => {
-            queryClient.invalidateQueries({ 
-                queryKey: reviewKeys.all 
-            });
-        },
-    });
+  return useMutation({
+    mutationFn: ({ reviewId, data }: { reviewId: string; data: UpdateReviewRequest }) =>
+      ReviewService.updateReview(reviewId, data),
+    onSuccess: (data) => {
+      const driverId = data.driver.uid;
+      const reviewerId = data.reviewer.uid; // ← récupère l’ID du reviewer depuis la réponse
+
+      queryClient.invalidateQueries({ queryKey: reviewKeys.driver(driverId) });
+      queryClient.invalidateQueries({ queryKey: reviewKeys.userRating(driverId) });
+      // 🔥 Ajoute cette ligne :
+      queryClient.invalidateQueries({ queryKey: reviewKeys.userReview(driverId, reviewerId) });
+    },
+    onError: (error: Error) => {
+      console.error('Erreur modification review:', error);
+    }
+  });
 };

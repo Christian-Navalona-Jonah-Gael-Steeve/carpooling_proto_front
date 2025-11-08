@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
-
+// components/reviews/ReviewSection.tsx
 import { useAuth } from '@/contexts/auth.context';
-import { useDriverRating, useDriverReviews, useHasCompletedTrip, useUserReviewForDriver } from '@/hooks/queries/review.queries';
+import {
+  useDriverRating,
+  useDriverReviews,
+  useHasCompletedTrip,
+  useUserReviewForDriver
+} from '@/hooks/queries/review.queries';
 import { Ionicons } from '@expo/vector-icons';
-
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { RatingStars } from './RatingStars';
 import { ReviewItem } from './ReviewItem';
@@ -19,156 +25,183 @@ interface ReviewSectionProps {
   driverId: string;
   driverName: string;
   compact?: boolean;
+  showAllReviews?: boolean;
 }
 
 export const ReviewSection: React.FC<ReviewSectionProps> = ({
   driverId,
   driverName,
   compact = false,
+  showAllReviews = false
 }) => {
   const { user } = useAuth();
-  const [showAllReviews, setShowAllReviews] = useState(false);
-  const [reviewModalVisible, setReviewModalVisible] = useState(false);
-
-  const { data: reviews, isLoading: reviewsLoading } = useDriverReviews(driverId);
-  const { data: rating, isLoading: ratingLoading } = useDriverRating(driverId);
-  const { data: userReview } = useUserReviewForDriver(driverId, user?.uid || '');
-  const { data: hasCompletedTrip, isLoading: tripCheckLoading } = useHasCompletedTrip(user?.uid || '', driverId);
-
-  const isLoading = reviewsLoading || ratingLoading || tripCheckLoading;
-  const displayedReviews = showAllReviews ? reviews : reviews?.slice(0, compact ? 2 : 3);
+  const [isReviewModalVisible, setReviewModalVisible] = useState(false);
+  const [showAll, setShowAll] = useState(showAllReviews);
+  
+  const { data: driverRating, isLoading: isLoadingRating, error: ratingError } = useDriverRating(driverId);
+  const { data: userReview, isLoading: isLoadingUserReview } = useUserReviewForDriver(
+    driverId, 
+    user?.uid || ''
+  );
+  const { data: reviews, isLoading: isLoadingReviews } = useDriverReviews(driverId);
+  const { data: hasCompletedTrip } = useHasCompletedTrip(user?.uid || '', driverId);
 
   const canReview = user && 
                    user.uid !== driverId && 
-                   !userReview &&
-                   hasCompletedTrip;
+                   hasCompletedTrip &&
+                   !userReview;
 
-  if (isLoading) {
+  const canEditReview = user && userReview;
+
+  // Gérer le cas où reviews est undefined
+  const reviewsList = reviews || [];
+  const recentReviews = showAll ? reviewsList : reviewsList.slice(0, 3);
+  const totalReviews = reviewsList.length;
+
+  const handleAddReview = () => {
+    if (!user) {
+      Alert.alert('Connexion requise', 'Vous devez être connecté pour donner un avis');
+      return;
+    }
+    
+    if (!hasCompletedTrip) {
+      Alert.alert(
+        'Action non autorisée', 
+        'Vous devez avoir effectué un trajet avec ce conducteur pour pouvoir le noter.'
+      );
+      return;
+    }
+
+    setReviewModalVisible(true);
+  };
+
+  const handleEditReview = () => {
+    setReviewModalVisible(true);
+  };
+
+  if (isLoadingRating || isLoadingUserReview) {
     return (
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#2563EB" />
-          <Text style={styles.loadingText}>Chargement des avis...</Text>
-        </View>
+      <View style={[styles.container, compact && styles.compactContainer]}>
+        <ActivityIndicator size="small" color="#2563EB" />
+        <Text style={styles.loadingText}>Chargement des avis...</Text>
       </View>
     );
   }
 
-  if (!reviews || reviews.length === 0) {
+  if (ratingError) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Avis</Text>
-          
-          {user && user.uid !== driverId && (
-            hasCompletedTrip ? (
-              <TouchableOpacity 
-                style={styles.addReviewButton}
-                onPress={() => setReviewModalVisible(true)}
-              >
-                <Ionicons name="star-outline" size={16} color="#2563EB" />
-                <Text style={styles.addReviewText}>Donner un avis</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.cannotReviewBadge}>
-                <Ionicons name="time-outline" size={14} color="#6B7280" />
-                <Text style={styles.cannotReviewText}>Course requise</Text>
-              </View>
-            )
-          )}
+      <View style={[styles.container, compact && styles.compactContainer]}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={24} color="#DC2626" />
+          <Text style={styles.errorText}>Erreur lors du chargement des avis</Text>
         </View>
-        
-        <View style={styles.emptyState}>
-          <Ionicons name="star-outline" size={40} color="#D1D5DB" />
-          <Text style={styles.emptyStateTitle}>Aucun avis</Text>
-          <Text style={styles.emptyStateText}>
-            {hasCompletedTrip 
-              ? `Soyez le premier à donner votre avis sur ${driverName}`
-              : `Aucun avis pour ${driverName}`
-            }
-          </Text>
-          
-          {user && user.uid !== driverId && !hasCompletedTrip && (
-            <Text style={styles.infoText}>
-              Effectuez une course avec ce conducteur pour pouvoir le noter
-            </Text>
-          )}
-        </View>
-
-        <ReviewModal
-          visible={reviewModalVisible}
-          onClose={() => setReviewModalVisible(false)}
-          driverId={driverId}
-          driverName={driverName}
-        />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compact && styles.compactContainer]}>
+      {/* En-tête avec note moyenne */}
       <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>Avis</Text>
-          <View style={styles.ratingSummary}>
-            <Text style={styles.averageRating}>{rating?.averageRating?.toFixed(1) || '0.0'}</Text>
-            <RatingStars rating={rating?.averageRating || 0} size={16} />
-            <Text style={styles.reviewCount}>({rating?.totalReviews || 0})</Text>
+        <View style={styles.ratingSummary}>
+          <View style={styles.ratingNumber}>
+            <Text style={styles.averageRating}>
+              {driverRating?.averageRating?.toFixed(1) || '0.0'}
+            </Text>
+            <Text style={styles.ratingOutOf}>/5</Text>
+          </View>
+          <View style={styles.ratingDetails}>
+            <RatingStars 
+              rating={driverRating?.averageRating || 0} 
+              size={compact ? 16 : 20} 
+            />
+            <Text style={styles.reviewCount}>
+              {driverRating?.totalReviews || 0} {driverRating?.totalReviews === 1 ? 'avis' : 'avis'}
+            </Text>
           </View>
         </View>
 
-        {canReview && (
-          <TouchableOpacity 
-            style={styles.addReviewButton}
-            onPress={() => setReviewModalVisible(true)}
-          >
-            <Ionicons name="star-outline" size={16} color="#2563EB" />
-            <Text style={styles.addReviewText}>Votre avis</Text>
-          </TouchableOpacity>
-        )}
-
-        {userReview && (
-          <View style={styles.userReviewedBadge}>
-            <Ionicons name="star" size={14} color="#059669" />
-            <Text style={styles.userReviewedText}>Vous avez noté</Text>
-          </View>
-        )}
-
-        {user && user.uid !== driverId && !hasCompletedTrip && !userReview && (
-          <View style={styles.cannotReviewBadge}>
-            <Ionicons name="time-outline" size={14} color="#6B7280" />
-            <Text style={styles.cannotReviewText}>Course requise</Text>
+        {/* Bouton d'action */}
+        {user && user.uid !== driverId && (
+          <View style={styles.actionButtons}>
+            {canReview && (
+              <TouchableOpacity 
+                style={styles.reviewButton}
+                onPress={handleAddReview}
+              >
+                <Ionicons name="star-outline" size={16} color="#2563EB" />
+                <Text style={styles.reviewButtonText}>Noter</Text>
+              </TouchableOpacity>
+            )}
+            {canEditReview && (
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={handleEditReview}
+              >
+                <Ionicons name="create-outline" size={16} color="#6B7280" />
+                <Text style={styles.editButtonText}>Modifier</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
 
+      {/* Liste des avis */}
+      {totalReviews > 0 && (
+        <View style={styles.reviewsContainer}>
+          <Text style={styles.reviewsTitle}>Avis récents</Text>
+          
+          <ScrollView 
+            style={styles.reviewsList}
+            scrollEnabled={showAll}
+            nestedScrollEnabled={true}
+          >
+            {recentReviews.map((review) => (
+              <ReviewItem
+                key={review.id}
+                review={review}
+                isCurrentUserReview={review.reviewer?.uid === user?.uid}
+              />
+            ))}
+          </ScrollView>
 
-      {displayedReviews?.map((review) => (
-        <ReviewItem 
-          key={review.id} 
-          review={review} 
-          isCurrentUserReview={review.reviewerId === user?.uid}
-        />
-      ))}
-
-      {reviews.length > (compact ? 2 : 3) && (
-        <TouchableOpacity 
-          style={styles.showMoreButton}
-          onPress={() => setShowAllReviews(!showAllReviews)}
-        >
-          <Text style={styles.showMoreText}>
-            {showAllReviews ? 'Voir moins' : `Voir tous les avis (${reviews.length})`}
-          </Text>
-          <Ionicons 
-            name={showAllReviews ? "chevron-up" : "chevron-down"} 
-            size={16} 
-            color="#2563EB" 
-          />
-        </TouchableOpacity>
+          {/* Bouton "Voir plus" / "Voir moins" */}
+          {totalReviews > 3 && (
+            <TouchableOpacity 
+              style={styles.showMoreButton}
+              onPress={() => setShowAll(!showAll)}
+            >
+              <Text style={styles.showMoreText}>
+                {showAll ? 'Voir moins' : `Voir tous les ${totalReviews} avis`}
+              </Text>
+              <Ionicons 
+                name={showAll ? "chevron-up" : "chevron-down"} 
+                size={16} 
+                color="#2563EB" 
+              />
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
+      {/* Aucun avis */}
+      {totalReviews === 0 && (
+        <View style={styles.noReviews}>
+          <Ionicons name="star-outline" size={32} color="#D1D5DB" />
+          {canReview && (
+            <TouchableOpacity 
+              style={styles.firstReviewButton}
+              onPress={handleAddReview}
+            >
+              <Text style={styles.firstReviewButtonText}>Soyez le premier à noter</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Modal d'avis */}
       <ReviewModal
-        visible={reviewModalVisible}
+        visible={isReviewModalVisible}
         onClose={() => setReviewModalVisible(false)}
         driverId={driverId}
         driverName={driverName}
@@ -185,15 +218,12 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
     padding: 16,
-    marginVertical: 8,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  compactContainer: {
+    padding: 12,
   },
   header: {
     flexDirection: 'row',
@@ -201,104 +231,78 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 16,
   },
-  titleContainer: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
   ratingSummary: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 12,
+  },
+  ratingNumber: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
   },
   averageRating: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  ratingOutOf: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginLeft: 2,
+  },
+  ratingDetails: {
+    gap: 4,
   },
   reviewCount: {
     fontSize: 14,
     color: '#6B7280',
   },
-  addReviewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 6,
-  },
-  addReviewText: {
-    fontSize: 14,
-    color: '#2563EB',
-    fontWeight: '500',
-  },
-  userReviewedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#D1FAE5',
-    borderRadius: 4,
-  },
-  userReviewedText: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: '500',
-  },
-  cannotReviewBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 4,
-  },
-  cannotReviewText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+  actionButtons: {
     gap: 8,
   },
-  loadingText: {
+  reviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2563EB',
+  },
+  reviewButtonText: {
+    fontSize: 14,
+    color: '#2563EB',
+    fontWeight: '600',
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  editButtonText: {
     fontSize: 14,
     color: '#6B7280',
+    fontWeight: '500',
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 24,
+  reviewsContainer: {
+    marginTop: 8,
   },
-  emptyStateTitle: {
+  reviewsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#374151',
-    marginTop: 8,
-    marginBottom: 4,
+    color: '#111827',
+    marginBottom: 12,
   },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    fontStyle: 'italic',
+  reviewsList: {
+    maxHeight: 300,
   },
   showMoreButton: {
     flexDirection: 'row',
@@ -311,6 +315,47 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontSize: 14,
     color: '#2563EB',
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  noReviews: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  noReviewsText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  firstReviewButton: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#2563EB',
+    borderRadius: 8,
+  },
+  firstReviewButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#DC2626',
   },
 });
+
+export default ReviewSection;
