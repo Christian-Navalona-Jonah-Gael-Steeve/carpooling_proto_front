@@ -1,21 +1,36 @@
 import { geocode } from "@/lib/api/geocode.service";
-import { fetchRoute } from "@/lib/api/trips.service";
+import {
+  closeTrip,
+  fetchRoute,
+  TripMatchResponse,
+  TripResponse,
+} from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
 import { Role } from "@/lib/types/user.types";
+import { useState } from "react";
+import { Alert } from "react-native";
 
 interface IUseTripHandlers {
   end: Coord | null;
   start: Coord | null;
+  setMatches: React.Dispatch<React.SetStateAction<TripMatchResponse[]>>;
   setEnd: React.Dispatch<React.SetStateAction<Coord | null>>;
   setMyPath: React.Dispatch<React.SetStateAction<Coord[]>>;
+  setActiveTrips: React.Dispatch<React.SetStateAction<TripResponse[]>>;
 }
 
 export const useTripHandlers = ({
   end,
   start,
+  setMatches,
+  setActiveTrips,
   setEnd,
   setMyPath,
 }: IUseTripHandlers) => {
+  const [closeModalTrip, setCloseModalTrip] = useState<TripResponse | null>(
+    null
+  );
+
   /**
    * Given a query string, try to find the destination coordinates
    * using geocoding. If the query is empty or too short, return null.
@@ -51,5 +66,23 @@ export const useTripHandlers = ({
     return null;
   };
 
-  return { confirmDestinationFromQuery };
+  const doCloseTrip = async () => {
+    if (!closeModalTrip) return;
+    try {
+      const res = await closeTrip(closeModalTrip.id);
+      setActiveTrips((L) => L.filter((t) => t.id !== res.id));
+      setMatches((M) => M.filter((m) => m.trip.id !== res.id));
+      setCloseModalTrip(null);
+    } catch (e) {
+      Alert.alert("Erreur", "Fermeture impossible pour le moment.");
+      console.log("Close trip error:", (e as Error).message);
+    }
+  };
+
+  return {
+    closeModalTrip,
+    setCloseModalTrip,
+    confirmDestinationFromQuery,
+    doCloseTrip,
+  };
 };

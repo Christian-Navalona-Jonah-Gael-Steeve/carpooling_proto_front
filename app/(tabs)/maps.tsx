@@ -19,7 +19,6 @@ import {
   LatLngDto,
   TripMatchResponse,
   TripResponse,
-  closeTrip,
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
@@ -86,9 +85,6 @@ export default function MapsScreen() {
   const [roleModal, setRoleModal] = useState<boolean>(
     hasDriver && hasPassenger
   );
-  const [closeModalTrip, setCloseModalTrip] = useState<TripResponse | null>(
-    null
-  );
 
   const { activeTrips, setActiveTrips } = useActiveTrips();
   const { currentPos, setCurrentPos } = usePassengerLocation(role);
@@ -98,11 +94,18 @@ export default function MapsScreen() {
       setMatches,
       setPublishModal,
     });
-  const { confirmDestinationFromQuery } = useTripHandlers({
+  const {
+    closeModalTrip,
+    confirmDestinationFromQuery,
+    doCloseTrip,
+    setCloseModalTrip,
+  } = useTripHandlers({
     end,
     start,
     setEnd,
     setMyPath,
+    setMatches,
+    setActiveTrips,
   });
 
   const Maps = useMemo(
@@ -116,19 +119,6 @@ export default function MapsScreen() {
   const onOwnTripPress = (t: TripResponse) => {
     if (t.driver.uid !== userId) return;
     setCloseModalTrip(t);
-  };
-
-  const doCloseTrip = async () => {
-    if (!closeModalTrip) return;
-    try {
-      const res = await closeTrip(closeModalTrip.id);
-      setActiveTrips((L) => L.filter((t) => t.id !== res.id));
-      setMatches((M) => M.filter((m) => m.trip.id !== res.id));
-      setCloseModalTrip(null);
-    } catch (e) {
-      Alert.alert("Erreur", "Fermeture impossible pour le moment.");
-      console.log("Close trip error:", (e as Error).message);
-    }
   };
 
   // ⚠️ NE PAS MODIFIER : ta fonction existante
