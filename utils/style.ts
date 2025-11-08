@@ -6,7 +6,7 @@ export const styles = StyleSheet.create({
   backButton: { marginRight: 16 },
   title: { fontSize: 24, fontWeight: "700", color: "#111827" },
   stepper: { flexDirection: "row", justifyContent: "center", marginVertical: 20 },
-  stepText: { fontSize: 16, color: "#333" },
+  stepText: { fontSize: 16, color: "#e79b9bff", backgroundColor: "#E5E7EB", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginHorizontal: 4 },
   sectionTitle: { fontSize: 18, fontWeight: "600", color: "#374151", marginBottom: 16 },
   userTypeContainer: { paddingHorizontal: 24, marginBottom: 32 },
   userTypeButtons: { flexDirection: "row", gap: 16 },

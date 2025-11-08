@@ -4,13 +4,16 @@ export interface SigninPayload {
 }
 
 export interface SignupPayload {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber: string;
-  cinNumber: string;
-  password: string;
-  confirmPassword: string;
+    firstName: string
+    lastName: string
+    email: string
+    phoneNumber: string
+    cinNumber: string
+    password: string
+    confirmPassword: string
+    city: string
+    address: string
+    codePostal: string
 }
 
 export interface AuthResponse {

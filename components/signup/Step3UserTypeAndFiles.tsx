@@ -18,8 +18,7 @@ interface Props {
   pickFile: () => Promise<void>;
 }
 
-const Step2UserTypeAndFiles: React.FC<Props> = ({ userType, setUserType, file, setFile, pickFile }) => {
-
+const Step3UserTypeAndFiles: React.FC<Props> = ({ userType, setUserType, file, setFile, pickFile }) => {
   return (
     <View style={styles.userTypeContainer}>
       <Text style={styles.sectionTitle}>Type de profil * </Text>
@@ -68,10 +67,14 @@ const Step2UserTypeAndFiles: React.FC<Props> = ({ userType, setUserType, file, s
           </Text>
         </TouchableOpacity>
       </View>
-
-      <Text style={{ fontWeight: "600", marginTop: 20 }}>
-        Pièce justificative *
-      </Text>
+      <View>
+        <Text style={[{ marginTop: 20 }, styles.sectionTitle]}>
+          Pièce justificative *
+        </Text>
+        <Text style={[{ marginTop: -5, color: "#25dged", fontStyle: "italic", backgroundColor: "yellow" }]}>
+          {userType === "PASSENGER" ? "CIN ou PASSPORT ou PERMIS DE CONDUIRE" : "PERMIS DE CONDUIRE"}
+        </Text>
+      </View>
       <TouchableOpacity onPress={pickFile} style={styles.fileButton}>
         <Text style={{ color: "#fff" }}>
           {file ? "Changer le fichier" : "Choisir un fichier (PNG/JPEG/JPG)"}
@@ -92,4 +95,4 @@ const Step2UserTypeAndFiles: React.FC<Props> = ({ userType, setUserType, file, s
   );
 };
 
-export default Step2UserTypeAndFiles;
+export default Step3UserTypeAndFiles;

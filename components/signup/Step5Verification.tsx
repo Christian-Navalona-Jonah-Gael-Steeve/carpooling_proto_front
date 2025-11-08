@@ -7,15 +7,15 @@ interface Props {
   setCode: (v: string[]) => void;
   inputs: React.MutableRefObject<Array<TextInput | null>>;
   handleCodeChange: (value: string, index: number) => void;
-  isStep3Done: boolean
+  isStep4Done: boolean
 }
 
-const Step4Verification: React.FC<Props> = ({
+const Step5Verification: React.FC<Props> = ({
   code,
   setCode,
   inputs,
   handleCodeChange,
-  isStep3Done
+  isStep4Done
 }) => {
   const [timer, setTimer] = useState(0);
   const [isResending, setIsResending] = useState(false);
@@ -45,7 +45,7 @@ const Step4Verification: React.FC<Props> = ({
   return (
     <View style={styles.form}>
       <Text style={styles.sectionTitle}>Vérification du compte</Text>
-      {isStep3Done ? (
+      {isStep4Done ? (
         <Text style={[styles.subtitle, { color: "green", fontWeight: "bold" }]}>
           Un code de vérification à 6 chiffres a été envoyé dans votre boîte mail.
         </Text>
@@ -88,4 +88,4 @@ const Step4Verification: React.FC<Props> = ({
   );
 };
 
-export default Step4Verification;
+export default Step5Verification;
