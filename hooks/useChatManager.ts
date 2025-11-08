@@ -1,17 +1,44 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useWebSocket } from '@/contexts/websocket.context';
-import { useAuth } from '@/contexts/auth.context';
+import { useEffect, useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWebSocket } from "@/contexts/websocket.context";
+import { useAuth } from "@/contexts/auth.context";
 import {
   IPrivateMessagePayload,
   MessageAckPayload,
   ConversationUpdatePayload,
   MessageStatusPayload,
-} from '@/lib/types/chat.types';
-import { MessageStatus } from '@/lib/enums/message.enum';
-import { CONVERSATION_KEY, CONVERSATION_LIST_KEY } from '@/constants/query-keys.constants';
-import { IConversationMessage } from '@/lib/types/conversation.types';
+} from "@/lib/types/chat.types";
+import { MessageStatus } from "@/lib/enums/message.enum";
+import {
+  CONVERSATION_KEY,
+  CONVERSATION_LIST_KEY,
+} from "@/constants/query-keys.constants";
+import { IConversationMessage } from "@/lib/types/conversation.types";
+import { MESSAGE_TIMEOUT_MS } from '../constants/chat.constants'
+import {
+  extractOptimisticMessages,
+  mergeOptimisticMessages,
+  removeMessageFromOptimisticRef,
+  addOptimisticMessage,
+  markMessageAsNotPending,
+  markMessageAsFailed,
+  replaceFailedMessage,
+  addRealMessage,
+  updateMessageStatus as updateMessageStatusInCache,
+  clearMessageTimeout,
+  clearAllTimeouts,
+  removePendingMessage,
+  addPendingMessage,
+  findPendingMessageByContent,
+  generateClientId,
+  generateOptimisticId,
+} from "../helpers/chat-helpers";
 
+/**
+ * Chat Manager Hook
+ *
+ * @returns
+ */
 export const useChatManager = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -25,16 +52,57 @@ export const useChatManager = () => {
     onStatusUpdate,
   } = useWebSocket();
 
-  // Local pending messages map (clientId -> message)
-  const pendingMessagesRef = useRef<Map<string, IPrivateMessagePayload>>(new Map());
-  const [pendingMessages, setPendingMessages] = useState<IPrivateMessagePayload[]>([]);
+  const pendingMessagesRef = useRef<Map<string, IPrivateMessagePayload>>(
+    new Map()
+  );
+  const [pendingMessages, setPendingMessages] = useState<
+    IPrivateMessagePayload[]
+  >([]);
 
-  // Send message
+  const messageTimeoutsRef = useRef<Map<string, number>>(new Map());
+
+  const optimisticMessagesRef = useRef<Map<number, IConversationMessage[]>>(
+    new Map()
+  );
+
+  /**
+   * Handles message timeout
+   */
+  const handleMessageTimeout = useCallback(
+    (clientId: string, conversationId?: number) => {
+      console.log("[Chat Manager] Message timeout:", clientId);
+
+      const pendingMsg = pendingMessagesRef.current.get(clientId);
+      if (!pendingMsg || !conversationId) return;
+
+      removePendingMessage(clientId, pendingMessagesRef, setPendingMessages);
+      clearMessageTimeout(clientId, messageTimeoutsRef);
+
+      markMessageAsFailed(queryClient, conversationId, pendingMsg.content);
+
+      extractOptimisticMessages(
+        queryClient,
+        conversationId,
+        optimisticMessagesRef
+      );
+    },
+    [queryClient]
+  );
+
+
+  /**
+   * Sends a new message with optimistic UI.
+   *
+   * @param recipientId
+   * @param content
+   * @param conversationId
+   * @returns
+   */
   const sendMessage = useCallback(
     (recipientId: string, content: string, conversationId?: number) => {
       if (!user) return;
 
-      const clientId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const clientId = generateClientId();
       const message: IPrivateMessagePayload = {
         clientId,
         conversationId,
@@ -45,51 +113,35 @@ export const useChatManager = () => {
         sentAt: new Date().toISOString(),
       };
 
-      // Add to pending messages
-      pendingMessagesRef.current.set(clientId, message);
-      setPendingMessages((prev) => [...prev, message]);
+      addPendingMessage(message, pendingMessagesRef, setPendingMessages);
 
-      // Optimistically add message to conversation cache
       if (conversationId) {
-        queryClient.setQueryData<{ pages: IConversationMessage[][]; pageParams: number[] }>(
-          [CONVERSATION_KEY, 'messages', conversationId],
-          (old) => {
-            if (!old) return old;
+        addOptimisticMessage(queryClient, conversationId, content, user);
+      }
 
-            const optimisticMessage: IConversationMessage = {
-              id: -Date.now(), // Temporary negative ID
-              conversationId,
-              sender: {
-                uid: user.uid,
-                email: user.email || '',
-                firstName: user.firstName || '',
-                lastName: user.lastName || '',
-                cinNumber: user.cinNumber || '',
-              },
-              content,
-              sentAt: new Date().toISOString(),
-              deliveredAt: undefined,
-              readAt: undefined,
-              status: MessageStatus.SENT,
-            };
+      const timeoutId = setTimeout(() => {
+        handleMessageTimeout(clientId, conversationId);
+      }, MESSAGE_TIMEOUT_MS);
+      messageTimeoutsRef.current.set(clientId, timeoutId);
 
-            const updatedPages = [...old.pages];
-            updatedPages[0] = [optimisticMessage, ...updatedPages[0]];
-
-            return { ...old, pages: updatedPages };
-          }
+      try {
+        sendPrivateMessage(message);
+        console.log("[Chat Manager] Message sent successfully:", clientId);
+      } catch (error) {
+        console.warn(
+          "[Chat Manager] Send failed (message pending, will timeout in 30s if no reconnect):",
+          error
         );
       }
 
-      // Send via WebSocket
-      sendPrivateMessage(message);
-
       return clientId;
     },
-    [user, sendPrivateMessage, queryClient]
+    [user, sendPrivateMessage, queryClient, handleMessageTimeout]
   );
 
-  // Mark message as read
+  /**
+   * Marks a message as read
+   */
   const markAsRead = useCallback(
     (messageId: number, conversationId: number) => {
       updateMessageStatus({
@@ -102,7 +154,9 @@ export const useChatManager = () => {
     [updateMessageStatus]
   );
 
-  // Mark message as delivered
+  /**
+   * Marks a message as delivered
+   */
   const markAsDelivered = useCallback(
     (messageId: number, conversationId: number) => {
       updateMessageStatus({
@@ -115,121 +169,194 @@ export const useChatManager = () => {
     [updateMessageStatus]
   );
 
-  // Handle acknowledgment
+  /**
+   * Retries sending a failed message.
+   *
+   * @param failedMessage
+   * @returns
+   */
+  const retryMessage = useCallback(
+    (failedMessage: IConversationMessage) => {
+      if (!user || !failedMessage.conversationId) return;
+
+      const conversation = queryClient.getQueryData<any>([
+        CONVERSATION_KEY,
+        failedMessage.conversationId,
+      ]);
+      const recipient = conversation?.participants?.find(
+        (p: any) => p.uid !== user.uid
+      );
+
+      if (!recipient) {
+        console.error("[Chat Manager] Could not find recipient for retry");
+        return;
+      }
+
+      const newClientId = generateClientId();
+      const message: IPrivateMessagePayload = {
+        clientId: newClientId,
+        conversationId: failedMessage.conversationId,
+        senderId: user.uid,
+        recipientId: recipient.uid,
+        content: failedMessage.content,
+        status: MessageStatus.SENT,
+        sentAt: new Date().toISOString(),
+      };
+
+      addPendingMessage(message, pendingMessagesRef, setPendingMessages);
+
+      console.log(
+        "[Chat Manager] Retrying message:",
+        failedMessage.id,
+        "→",
+        newClientId
+      );
+
+      const newOptimisticMessage: IConversationMessage = {
+        id: generateOptimisticId(),
+        conversationId: failedMessage.conversationId,
+        sender: {
+          uid: user.uid,
+          email: user.email || "",
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          cinNumber: user.cinNumber || "",
+        },
+        content: failedMessage.content,
+        sentAt: new Date().toISOString(),
+        deliveredAt: undefined,
+        readAt: undefined,
+        status: MessageStatus.SENT,
+        isPending: true,
+        isFailed: false,
+      };
+
+      replaceFailedMessage(
+        queryClient,
+        failedMessage.conversationId,
+        failedMessage.id,
+        newOptimisticMessage
+      );
+
+      // Explicitly remove old failed message from optimistic ref to prevent merge-back
+      removeMessageFromOptimisticRef(
+        failedMessage.conversationId,
+        failedMessage.id,
+        optimisticMessagesRef
+      );
+
+      extractOptimisticMessages(
+        queryClient,
+        failedMessage.conversationId,
+        optimisticMessagesRef
+      );
+
+      const timeoutId = setTimeout(() => {
+        handleMessageTimeout(newClientId, failedMessage.conversationId);
+      }, MESSAGE_TIMEOUT_MS);
+      messageTimeoutsRef.current.set(newClientId, timeoutId);
+
+      try {
+        sendPrivateMessage(message);
+        console.log("[Chat Manager] Retry sent successfully:", newClientId);
+      } catch (error) {
+        console.warn(
+          "[Chat Manager] Retry send failed (pending, will timeout in 30s if no reconnect):",
+          error
+        );
+      }
+
+      return newClientId;
+    },
+    [user, sendPrivateMessage, queryClient, handleMessageTimeout]
+  );
+
+
+  /**
+   * Handles message acknowledgment
+   */
   useEffect(() => {
     const unsubscribe = onAckReceived((ack: MessageAckPayload) => {
-      console.log('[Chat Manager] Received ack:', ack);
+      console.log("[Chat Manager] Received ack:", ack);
+
+      clearMessageTimeout(ack.clientId, messageTimeoutsRef);
+
+      const pendingMsg = pendingMessagesRef.current.get(ack.clientId);
+      if (!pendingMsg) return;
 
       if (ack.success) {
-        const pendingMsg = pendingMessagesRef.current.get(ack.clientId);
+        removePendingMessage(ack.clientId, pendingMessagesRef, setPendingMessages);
 
-        // Remove from pending
-        pendingMessagesRef.current.delete(ack.clientId);
-        setPendingMessages((prev) => prev.filter((m) => m.clientId !== ack.clientId));
-
-        // Update conversation messages cache - remove optimistic message
-        if (ack.conversationId && pendingMsg) {
-          queryClient.setQueryData<{ pages: IConversationMessage[][]; pageParams: number[] }>(
-            [CONVERSATION_KEY, 'messages', ack.conversationId],
-            (old) => {
-              if (!old) return old;
-
-              // Remove the optimistic message (it will be replaced by the real one from WebSocket)
-              const updatedPages = old.pages.map((page) => {
-                return page.filter((msg) => {
-                  // Remove messages with temporary IDs that match the pending message content
-                  const isOptimistic = msg.id < 0 && msg.content === pendingMsg.content;
-                  return !isOptimistic;
-                });
-              });
-
-              return { ...old, pages: updatedPages };
-            }
+        if (ack.conversationId) {
+          markMessageAsNotPending(
+            queryClient,
+            ack.conversationId,
+            pendingMsg.content
           );
         }
       } else {
-        console.error('[Chat Manager] Message failed:', ack.error);
-        // Keep in pending or show error to user
+        console.error("[Chat Manager] Message failed:", ack.error);
+
+        if (ack.conversationId) {
+          markMessageAsFailed(
+            queryClient,
+            ack.conversationId,
+            pendingMsg.content
+          );
+          extractOptimisticMessages(
+            queryClient,
+            ack.conversationId,
+            optimisticMessagesRef
+          );
+        }
+
+        removePendingMessage(ack.clientId, pendingMessagesRef, setPendingMessages);
       }
     });
 
     return unsubscribe;
   }, [onAckReceived, queryClient]);
 
-  // Handle new message received
+  /**
+   * Handles new messages received
+   */
   useEffect(() => {
     const unsubscribe = onMessageReceived((message: IPrivateMessagePayload) => {
-      console.log('[Chat Manager] Received message:', message);
+      console.log("[Chat Manager] Received message:", message);
 
       if (!message.conversationId) return;
 
-      // Add message to conversation messages cache (prepend to first page)
-      queryClient.setQueryData<{ pages: IConversationMessage[][]; pageParams: number[] }>(
-        [CONVERSATION_KEY, 'messages', message.conversationId],
-        (old) => {
-          if (!old) {
-            // Create new cache entry
-            return {
-              pages: [
-                [
-                  {
-                    id: message.id!,
-                    conversationId: message.conversationId!,
-                    sender: {
-                      uid: message.senderId,
-                      email: '',
-                      firstName: '',
-                      lastName: '',
-                      cinNumber: '',
-                    },
-                    content: message.content,
-                    sentAt: message.sentAt!,
-                    deliveredAt: message.deliveredAt,
-                    readAt: message.readAt,
-                    status: message.status,
-                  },
-                ],
-              ],
-              pageParams: [0],
-            };
-          }
+      if (message.senderId === user?.uid) {
+        const matchingPending = findPendingMessageByContent(
+          message.content,
+          message.conversationId,
+          pendingMessagesRef
+        );
 
-          // Check if message already exists in cache (deduplicate)
-          const messageExists = old.pages.some((page) =>
-            page.some((msg) => msg.id === message.id)
+        if (matchingPending) {
+          const [clientId] = matchingPending;
+          console.log(
+            "[Chat Manager] Clearing pending:",
+            clientId,
+            "→ real:",
+            message.id
           );
 
-          if (messageExists) {
-            console.log('[Chat Manager] Message already exists, skipping:', message.id);
-            return old;
-          }
-
-          // Prepend to first page
-          const newMessage: IConversationMessage = {
-            id: message.id!,
-            conversationId: message.conversationId!,
-            sender: {
-              uid: message.senderId,
-              email: '',
-              firstName: '',
-              lastName: '',
-              cinNumber: '',
-            },
-            content: message.content,
-            sentAt: message.sentAt!,
-            deliveredAt: message.deliveredAt,
-            readAt: message.readAt,
-            status: message.status,
-          };
-
-          const updatedPages = [...old.pages];
-          updatedPages[0] = [newMessage, ...updatedPages[0]];
-
-          return { ...old, pages: updatedPages };
+          clearMessageTimeout(clientId, messageTimeoutsRef);
+          removePendingMessage(clientId, pendingMessagesRef, setPendingMessages);
         }
-      );
+      }
 
-      // Auto-mark as delivered if we're the recipient
+      addRealMessage(queryClient, message);
+
+      if (message.senderId === user?.uid) {
+        extractOptimisticMessages(
+          queryClient,
+          message.conversationId,
+          optimisticMessagesRef
+        );
+      }
+
       if (message.recipientId === user?.uid && message.id) {
         markAsDelivered(message.id, message.conversationId);
       }
@@ -238,60 +365,92 @@ export const useChatManager = () => {
     return unsubscribe;
   }, [onMessageReceived, queryClient, user, markAsDelivered]);
 
-  // Handle conversation update
+  /**
+   * Handles conversation updates
+   */
   useEffect(() => {
-    const unsubscribe = onConversationUpdate((update: ConversationUpdatePayload) => {
-      console.log('[Chat Manager] Conversation update:', update);
-
-      // Invalidate conversations list to refresh
-      queryClient.invalidateQueries({ queryKey: [CONVERSATION_KEY, CONVERSATION_LIST_KEY] });
-    });
+    const unsubscribe = onConversationUpdate(
+      (update: ConversationUpdatePayload) => {
+        console.log("[Chat Manager] Conversation update:", update);
+        queryClient.invalidateQueries({
+          queryKey: [CONVERSATION_KEY, CONVERSATION_LIST_KEY],
+        });
+      }
+    );
 
     return unsubscribe;
   }, [onConversationUpdate, queryClient]);
 
-  // Handle status update
+
+  /**
+   * Handles message status updates
+   */
   useEffect(() => {
     const unsubscribe = onStatusUpdate((statusUpdate: MessageStatusPayload) => {
-      console.log('[Chat Manager] Status update:', statusUpdate);
-
-      // Update message status in conversation messages cache
-      queryClient.setQueryData<{ pages: IConversationMessage[][]; pageParams: number[] }>(
-        [CONVERSATION_KEY, 'messages', statusUpdate.conversationId],
-        (old) => {
-          if (!old) return old;
-
-          const updatedPages = old.pages.map((page) =>
-            page.map((msg) => {
-              if (msg.id === statusUpdate.messageId) {
-                return {
-                  ...msg,
-                  status: statusUpdate.status,
-                  deliveredAt:
-                    statusUpdate.status === MessageStatus.DELIVERED
-                      ? statusUpdate.timestamp
-                      : msg.deliveredAt,
-                  readAt:
-                    statusUpdate.status === MessageStatus.READ ? statusUpdate.timestamp : msg.readAt,
-                };
-              }
-              return msg;
-            })
-          );
-
-          return { ...old, pages: updatedPages };
-        }
-      );
+      console.log("[Chat Manager] Status update:", statusUpdate);
+      updateMessageStatusInCache(queryClient, statusUpdate);
     });
 
     return unsubscribe;
   }, [onStatusUpdate, queryClient]);
+
+
+  /**
+   * Cleans up all timeouts on unmount
+   */
+  useEffect(() => {
+    return () => {
+      clearAllTimeouts(messageTimeoutsRef);
+    };
+  }, []);
+
+
+  /**
+   * Subscribes to query cache events
+   */
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (
+        event.type === "updated" &&
+        event.action.type === "fetch" &&
+        event.query.queryKey[0] === CONVERSATION_KEY &&
+        event.query.queryKey[1] === "messages"
+      ) {
+        const conversationId = event.query.queryKey[2] as number;
+        extractOptimisticMessages(
+          queryClient,
+          conversationId,
+          optimisticMessagesRef
+        );
+      }
+
+      if (
+        event.type === "updated" &&
+        event.action.type === "success" &&
+        event.query.queryKey[0] === CONVERSATION_KEY &&
+        event.query.queryKey[1] === "messages"
+      ) {
+        const conversationId = event.query.queryKey[2] as number;
+        setTimeout(() => {
+          mergeOptimisticMessages(
+            queryClient,
+            conversationId,
+            optimisticMessagesRef
+          );
+        }, 0);
+      }
+    });
+
+    return unsubscribe;
+  }, [queryClient]);
+
 
   return {
     isConnected,
     sendMessage,
     markAsRead,
     markAsDelivered,
+    retryMessage,
     pendingMessages,
   };
 };

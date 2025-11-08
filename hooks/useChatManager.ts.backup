@@ -1,0 +1,709 @@
+import { useEffect, useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWebSocket } from "@/contexts/websocket.context";
+import { useAuth } from "@/contexts/auth.context";
+import {
+  IPrivateMessagePayload,
+  MessageAckPayload,
+  ConversationUpdatePayload,
+  MessageStatusPayload,
+} from "@/lib/types/chat.types";
+import { MessageStatus } from "@/lib/enums/message.enum";
+import {
+  CONVERSATION_KEY,
+  CONVERSATION_LIST_KEY,
+} from "@/constants/query-keys.constants";
+import { IConversationMessage } from "@/lib/types/conversation.types";
+
+export const useChatManager = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const {
+    isConnected,
+    sendPrivateMessage,
+    updateMessageStatus,
+    onMessageReceived,
+    onAckReceived,
+    onConversationUpdate,
+    onStatusUpdate,
+  } = useWebSocket();
+
+  // Local pending messages map (clientId -> message)
+  const pendingMessagesRef = useRef<Map<string, IPrivateMessagePayload>>(
+    new Map()
+  );
+  const [pendingMessages, setPendingMessages] = useState<
+    IPrivateMessagePayload[]
+  >([]);
+
+  // Timeout map (clientId -> timeout ID) - 30 second timeout for pending messages
+  const messageTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const MESSAGE_TIMEOUT_MS = 30000; // 30 seconds
+
+  // Store optimistic messages (pending/failed) per conversation to preserve them during refetch
+  const optimisticMessagesRef = useRef<Map<number, IConversationMessage[]>>(
+    new Map()
+  );
+
+  // Helper to extract and store optimistic messages (pending or failed)
+  const extractOptimisticMessages = useCallback(
+    (conversationId: number) => {
+      const cachedData = queryClient.getQueryData<{
+        pages: IConversationMessage[][];
+        pageParams: number[];
+      }>([CONVERSATION_KEY, "messages", conversationId]);
+
+      if (cachedData) {
+        // Extract messages that are pending or failed (optimistic UI)
+        const optimisticMsgs = cachedData.pages
+          .flat()
+          .filter((msg) => msg.isPending || msg.isFailed);
+
+        if (optimisticMsgs.length > 0) {
+          optimisticMessagesRef.current.set(conversationId, optimisticMsgs);
+        } else {
+          optimisticMessagesRef.current.delete(conversationId);
+        }
+      }
+    },
+    [queryClient]
+  );
+
+  // Helper to merge optimistic messages back into cache
+  const mergeOptimisticMessages = useCallback(
+    (conversationId: number) => {
+      const optimisticMsgs = optimisticMessagesRef.current.get(conversationId);
+
+      if (!optimisticMsgs || optimisticMsgs.length === 0) return;
+
+      queryClient.setQueryData<{
+        pages: IConversationMessage[][];
+        pageParams: number[];
+      }>([CONVERSATION_KEY, "messages", conversationId], (old) => {
+        if (!old) return old;
+
+        // Get existing message IDs to avoid duplicates
+        const existingIds = new Set(old.pages.flat().map((msg) => msg.id));
+
+        // Filter out optimistic messages that already exist
+        const newOptimisticMsgs = optimisticMsgs.filter(
+          (msg) => !existingIds.has(msg.id)
+        );
+
+        if (newOptimisticMsgs.length === 0) return old;
+
+        // Add optimistic messages to the first page
+        const updatedPages = [...old.pages];
+        updatedPages[0] = [...newOptimisticMsgs, ...updatedPages[0]];
+
+        return { ...old, pages: updatedPages };
+      });
+    },
+    [queryClient]
+  );
+
+  // Handle message timeout - mark as failed
+  const handleMessageTimeout = useCallback(
+    (clientId: string, conversationId?: number) => {
+      console.log("[Chat Manager] Message timeout:", clientId);
+
+      const pendingMsg = pendingMessagesRef.current.get(clientId);
+
+      // Remove from pending
+      pendingMessagesRef.current.delete(clientId);
+      setPendingMessages((prev) => prev.filter((m) => m.clientId !== clientId));
+      messageTimeoutsRef.current.delete(clientId);
+
+      // Mark message as failed in cache
+      if (conversationId && pendingMsg) {
+        queryClient.setQueryData<{
+          pages: IConversationMessage[][];
+          pageParams: number[];
+        }>([CONVERSATION_KEY, "messages", conversationId], (old) => {
+          if (!old) return old;
+
+          const updatedPages = old.pages.map((page) => {
+            return page.map((msg) => {
+              // Mark the optimistic message as failed
+              if (msg.id < 0 && msg.content === pendingMsg.content) {
+                return { ...msg, isPending: false, isFailed: true };
+              }
+              return msg;
+            });
+          });
+
+          return { ...old, pages: updatedPages };
+        });
+
+        // Store optimistic message so it persists through refetch
+        extractOptimisticMessages(conversationId);
+      }
+    },
+    [queryClient, extractOptimisticMessages]
+  );
+
+  // Send message
+  const sendMessage = useCallback(
+    (recipientId: string, content: string, conversationId?: number) => {
+      if (!user) return;
+
+      const clientId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      const message: IPrivateMessagePayload = {
+        clientId,
+        conversationId,
+        senderId: user.uid,
+        recipientId,
+        content,
+        status: MessageStatus.SENT,
+        sentAt: new Date().toISOString(),
+      };
+
+      // Add to pending messages
+      pendingMessagesRef.current.set(clientId, message);
+      setPendingMessages((prev) => [...prev, message]);
+
+      // Optimistically add message to conversation cache
+      if (conversationId) {
+        queryClient.setQueryData<{
+          pages: IConversationMessage[][];
+          pageParams: number[];
+        }>([CONVERSATION_KEY, "messages", conversationId], (old) => {
+          if (!old) return old;
+
+          const optimisticMessage: IConversationMessage = {
+            id: -Date.now(), // Temporary negative ID
+            conversationId,
+            sender: {
+              uid: user.uid,
+              email: user.email || "",
+              firstName: user.firstName || "",
+              lastName: user.lastName || "",
+              cinNumber: user.cinNumber || "",
+            },
+            content,
+            sentAt: new Date().toISOString(),
+            deliveredAt: undefined,
+            readAt: undefined,
+            status: MessageStatus.SENT,
+            isPending: true, // Mark as pending
+            isFailed: false,
+          };
+
+          const updatedPages = [...old.pages];
+          updatedPages[0] = [optimisticMessage, ...updatedPages[0]];
+
+          return { ...old, pages: updatedPages };
+        });
+      }
+
+      // Send via WebSocket (catch error if not connected, but keep message pending)
+      try {
+        sendPrivateMessage(message);
+      } catch (error) {
+        console.error(
+          "[Chat Manager] Failed to send message (will retry in timeout):",
+          error
+        );
+        const timeoutId = setTimeout(() => {
+          handleMessageTimeout(clientId, conversationId);
+        }, MESSAGE_TIMEOUT_MS);
+
+        messageTimeoutsRef.current.set(clientId, timeoutId);
+      }
+
+      return clientId;
+    },
+    [
+      user,
+      sendPrivateMessage,
+      queryClient,
+      handleMessageTimeout,
+      MESSAGE_TIMEOUT_MS,
+    ]
+  );
+
+  // Mark message as read
+  const markAsRead = useCallback(
+    (messageId: number, conversationId: number) => {
+      updateMessageStatus({
+        messageId,
+        conversationId,
+        status: MessageStatus.READ,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [updateMessageStatus]
+  );
+
+  // Mark message as delivered
+  const markAsDelivered = useCallback(
+    (messageId: number, conversationId: number) => {
+      updateMessageStatus({
+        messageId,
+        conversationId,
+        status: MessageStatus.DELIVERED,
+        timestamp: new Date().toISOString(),
+      });
+    },
+    [updateMessageStatus]
+  );
+
+  // Handle acknowledgment
+  useEffect(() => {
+    const unsubscribe = onAckReceived((ack: MessageAckPayload) => {
+      console.log("[Chat Manager] Received ack:", ack);
+
+      // Clear timeout since we received ack (success or failure)
+      const timeoutId = messageTimeoutsRef.current.get(ack.clientId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        messageTimeoutsRef.current.delete(ack.clientId);
+      }
+
+      if (ack.success) {
+        const pendingMsg = pendingMessagesRef.current.get(ack.clientId);
+
+        // Remove from pending
+        pendingMessagesRef.current.delete(ack.clientId);
+        setPendingMessages((prev) =>
+          prev.filter((m) => m.clientId !== ack.clientId)
+        );
+
+        // Update conversation messages cache - remove optimistic message and mark as not pending
+        if (ack.conversationId && pendingMsg) {
+          queryClient.setQueryData<{
+            pages: IConversationMessage[][];
+            pageParams: number[];
+          }>([CONVERSATION_KEY, "messages", ack.conversationId], (old) => {
+            if (!old) return old;
+
+            // Mark message as no longer pending (it will be replaced by the real one from WebSocket)
+            const updatedPages = old.pages.map((page) => {
+              return page.map((msg) => {
+                // Update the optimistic message
+                if (msg.id < 0 && msg.content === pendingMsg.content) {
+                  return { ...msg, isPending: false };
+                }
+                return msg;
+              });
+            });
+
+            return { ...old, pages: updatedPages };
+          });
+        }
+      } else {
+        console.error("[Chat Manager] Message failed:", ack.error);
+        const pendingMsg = pendingMessagesRef.current.get(ack.clientId);
+
+        // Mark message as failed in cache (don't remove it)
+        if (ack.conversationId && pendingMsg) {
+          queryClient.setQueryData<{
+            pages: IConversationMessage[][];
+            pageParams: number[];
+          }>([CONVERSATION_KEY, "messages", ack.conversationId], (old) => {
+            if (!old) return old;
+
+            const updatedPages = old.pages.map((page) => {
+              return page.map((msg) => {
+                // Mark the optimistic message as failed
+                if (msg.id < 0 && msg.content === pendingMsg.content) {
+                  return { ...msg, isPending: false, isFailed: true };
+                }
+                return msg;
+              });
+            });
+
+            return { ...old, pages: updatedPages };
+          });
+
+          // Store optimistic message so it persists through refetch
+          extractOptimisticMessages(ack.conversationId);
+        }
+
+        // Remove from pending messages (but keep in cache as failed)
+        pendingMessagesRef.current.delete(ack.clientId);
+        setPendingMessages((prev) =>
+          prev.filter((m) => m.clientId !== ack.clientId)
+        );
+      }
+    });
+
+    return unsubscribe;
+  }, [onAckReceived, queryClient, extractOptimisticMessages]);
+
+  // Handle new message received
+  useEffect(() => {
+    const unsubscribe = onMessageReceived((message: IPrivateMessagePayload) => {
+      console.log("[Chat Manager] Received message:", message);
+
+      if (!message.conversationId) return;
+
+      // If this is a message we sent, find and clear the pending state
+      if (message.senderId === user?.uid) {
+        // Find matching pending message by content
+        const pendingEntries = Array.from(pendingMessagesRef.current.entries());
+        const matchingPending = pendingEntries.find(
+          ([_, pendingMsg]) =>
+            pendingMsg.content === message.content &&
+            pendingMsg.conversationId === message.conversationId
+        );
+
+        if (matchingPending) {
+          const [clientId] = matchingPending;
+          console.log(
+            "[Chat Manager] Clearing pending message:",
+            clientId,
+            "→ real message:",
+            message.id
+          );
+
+          // Clear timeout
+          const timeoutId = messageTimeoutsRef.current.get(clientId);
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            messageTimeoutsRef.current.delete(clientId);
+          }
+
+          // Remove from pending messages
+          pendingMessagesRef.current.delete(clientId);
+          setPendingMessages((prev) =>
+            prev.filter((m) => m.clientId !== clientId)
+          );
+        }
+      }
+
+      // Add message to conversation messages cache (prepend to first page)
+      queryClient.setQueryData<{
+        pages: IConversationMessage[][];
+        pageParams: number[];
+      }>([CONVERSATION_KEY, "messages", message.conversationId], (old) => {
+        if (!old) {
+          // Create new cache entry
+          return {
+            pages: [
+              [
+                {
+                  id: message.id!,
+                  conversationId: message.conversationId!,
+                  sender: {
+                    uid: message.senderId,
+                    email: "",
+                    firstName: "",
+                    lastName: "",
+                    cinNumber: "",
+                  },
+                  content: message.content,
+                  sentAt: message.sentAt!,
+                  deliveredAt: message.deliveredAt,
+                  readAt: message.readAt,
+                  status: message.status,
+                },
+              ],
+            ],
+            pageParams: [0],
+          };
+        }
+
+        // Check if message already exists in cache (deduplicate)
+        const messageExists = old.pages.some((page) =>
+          page.some((msg) => msg.id === message.id)
+        );
+
+        if (messageExists) {
+          console.log(
+            "[Chat Manager] Message already exists, skipping:",
+            message.id
+          );
+          return old;
+        }
+
+        // Prepend to first page
+        const newMessage: IConversationMessage = {
+          id: message.id!,
+          conversationId: message.conversationId!,
+          sender: {
+            uid: message.senderId,
+            email: "",
+            firstName: "",
+            lastName: "",
+            cinNumber: "",
+          },
+          content: message.content,
+          sentAt: message.sentAt!,
+          deliveredAt: message.deliveredAt,
+          readAt: message.readAt,
+          status: message.status,
+        };
+
+        // Remove any optimistic messages with the same content and sender (replace with real message)
+        const updatedPages = old.pages.map((page) => {
+          return page.filter((msg) => {
+            // Keep all real messages (positive IDs) and messages that don't match
+            if (msg.id > 0) return true;
+            // Remove optimistic messages that match the incoming message
+            return !(
+              msg.content === message.content &&
+              msg.sender.uid === message.senderId
+            );
+          });
+        });
+
+        // Add the real message to the first page
+        updatedPages[0] = [newMessage, ...updatedPages[0]];
+
+        return { ...old, pages: updatedPages };
+      });
+
+      // Update optimistic messages ref after removing pending message
+      if (message.senderId === user?.uid) {
+        extractOptimisticMessages(message.conversationId);
+      }
+
+      // Auto-mark as delivered if we're the recipient
+      if (message.recipientId === user?.uid && message.id) {
+        markAsDelivered(message.id, message.conversationId);
+      }
+    });
+
+    return unsubscribe;
+  }, [
+    onMessageReceived,
+    queryClient,
+    user,
+    markAsDelivered,
+    extractOptimisticMessages,
+  ]);
+
+  // Handle conversation update
+  useEffect(() => {
+    const unsubscribe = onConversationUpdate(
+      (update: ConversationUpdatePayload) => {
+        console.log("[Chat Manager] Conversation update:", update);
+
+        // Invalidate conversations list to refresh
+        queryClient.invalidateQueries({
+          queryKey: [CONVERSATION_KEY, CONVERSATION_LIST_KEY],
+        });
+      }
+    );
+
+    return unsubscribe;
+  }, [onConversationUpdate, queryClient]);
+
+  // Handle status update
+  useEffect(() => {
+    const unsubscribe = onStatusUpdate((statusUpdate: MessageStatusPayload) => {
+      console.log("[Chat Manager] Status update:", statusUpdate);
+
+      // Update message status in conversation messages cache
+      queryClient.setQueryData<{
+        pages: IConversationMessage[][];
+        pageParams: number[];
+      }>([CONVERSATION_KEY, "messages", statusUpdate.conversationId], (old) => {
+        if (!old) return old;
+
+        const updatedPages = old.pages.map((page) =>
+          page.map((msg) => {
+            if (msg.id === statusUpdate.messageId) {
+              return {
+                ...msg,
+                status: statusUpdate.status,
+                deliveredAt:
+                  statusUpdate.status === MessageStatus.DELIVERED
+                    ? statusUpdate.timestamp
+                    : msg.deliveredAt,
+                readAt:
+                  statusUpdate.status === MessageStatus.READ
+                    ? statusUpdate.timestamp
+                    : msg.readAt,
+              };
+            }
+            return msg;
+          })
+        );
+
+        return { ...old, pages: updatedPages };
+      });
+    });
+
+    return unsubscribe;
+  }, [onStatusUpdate, queryClient]);
+
+  // Cleanup timeouts on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Clear all pending timeouts
+      messageTimeoutsRef.current.forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+      messageTimeoutsRef.current.clear();
+    };
+  }, []);
+
+  // Preserve optimistic messages (pending/failed) during query refetch (e.g., on WebSocket reconnect)
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      // Before refetch, extract optimistic messages
+      if (
+        event.type === "updated" &&
+        event.action.type === "fetch" &&
+        event.query.queryKey[0] === CONVERSATION_KEY &&
+        event.query.queryKey[1] === "messages"
+      ) {
+        const conversationId = event.query.queryKey[2] as number;
+        extractOptimisticMessages(conversationId);
+      }
+
+      // After successful refetch, merge optimistic messages back
+      if (
+        event.type === "updated" &&
+        event.action.type === "success" &&
+        event.query.queryKey[0] === CONVERSATION_KEY &&
+        event.query.queryKey[1] === "messages"
+      ) {
+        const conversationId = event.query.queryKey[2] as number;
+
+        // Merge optimistic messages back after refetch
+        setTimeout(() => {
+          mergeOptimisticMessages(conversationId);
+        }, 0);
+      }
+    });
+
+    return unsubscribe;
+  }, [queryClient, extractOptimisticMessages, mergeOptimisticMessages]);
+
+  // Retry failed message
+  const retryMessage = useCallback(
+    (failedMessage: IConversationMessage) => {
+      if (!user || !failedMessage.conversationId) return;
+
+      // Get conversation from cache to find recipient
+      const conversation = queryClient.getQueryData<any>([
+        CONVERSATION_KEY,
+        failedMessage.conversationId,
+      ]);
+      const recipient = conversation?.participants?.find(
+        (p: any) => p.uid !== user.uid
+      );
+
+      if (!recipient) {
+        console.error("[Chat Manager] Could not find recipient for retry");
+        return;
+      }
+
+      const recipientId = recipient.uid;
+
+      // Create new message with new clientId
+      const newClientId = `${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      const message: IPrivateMessagePayload = {
+        clientId: newClientId,
+        conversationId: failedMessage.conversationId,
+        senderId: user.uid,
+        recipientId,
+        content: failedMessage.content,
+        status: MessageStatus.SENT,
+        sentAt: new Date().toISOString(),
+      };
+
+      // Add to pending messages
+      pendingMessagesRef.current.set(newClientId, message);
+      setPendingMessages((prev) => [...prev, message]);
+
+      console.log(
+        "[Chat Manager] Retrying failed message:",
+        failedMessage.id,
+        "→",
+        newClientId
+      );
+
+      // Remove old failed message AND add new pending message in single atomic operation
+      queryClient.setQueryData<{
+        pages: IConversationMessage[][];
+        pageParams: number[];
+      }>(
+        [CONVERSATION_KEY, "messages", failedMessage.conversationId],
+        (old) => {
+          if (!old) return old;
+
+          // Create new pending message
+          const optimisticMessage: IConversationMessage = {
+            id: -Date.now(), // New temporary negative ID
+            conversationId: failedMessage.conversationId,
+            sender: {
+              uid: user.uid,
+              email: user.email || "",
+              firstName: user.firstName || "",
+              lastName: user.lastName || "",
+              cinNumber: user.cinNumber || "",
+            },
+            content: failedMessage.content,
+            sentAt: new Date().toISOString(),
+            deliveredAt: undefined,
+            readAt: undefined,
+            status: MessageStatus.SENT,
+            isPending: true,
+            isFailed: false,
+          };
+
+          // Remove old failed message and add new pending message atomically
+          const updatedPages = old.pages.map((page, pageIndex) => {
+            // Filter out the old failed message
+            const filtered = page.filter((msg) => msg.id !== failedMessage.id);
+
+            // Add new pending message to first page only
+            if (pageIndex === 0) {
+              return [optimisticMessage, ...filtered];
+            }
+
+            return filtered;
+          });
+
+          return { ...old, pages: updatedPages };
+        }
+      );
+
+      // Update optimistic messages ref after the atomic update
+      extractOptimisticMessages(failedMessage.conversationId);
+
+      // Send via WebSocket (catch error if not connected, but keep message pending)
+      try {
+        sendPrivateMessage(message);
+      } catch (error) {
+        console.error(
+          "[Chat Manager] Failed to retry message (will timeout):",
+          error
+        );
+        // Set timeout to mark message as failed if no ack received within 30 seconds
+        const timeoutId = setTimeout(() => {
+          handleMessageTimeout(newClientId, failedMessage.conversationId);
+        }, MESSAGE_TIMEOUT_MS);
+
+        messageTimeoutsRef.current.set(newClientId, timeoutId);
+      }
+
+      return newClientId;
+    },
+    [
+      user,
+      sendPrivateMessage,
+      queryClient,
+      handleMessageTimeout,
+      MESSAGE_TIMEOUT_MS,
+      extractOptimisticMessages,
+    ]
+  );
+
+  return {
+    isConnected,
+    sendMessage,
+    markAsRead,
+    markAsDelivered,
+    pendingMessages,
+    retryMessage,
+  };
+};

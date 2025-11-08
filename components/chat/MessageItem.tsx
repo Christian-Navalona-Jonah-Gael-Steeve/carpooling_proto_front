@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { IConversationMessage } from '@/lib/types/conversation.types';
 import { MessageStatus } from '@/lib/enums/message.enum';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,30 +8,38 @@ interface MessageItemProps {
   message: IConversationMessage;
   isCurrentUser: boolean;
   showSender?: boolean;
+  onRetry?: (message: IConversationMessage) => void;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
   isCurrentUser,
   showSender = false,
+  onRetry,
 }) => {
-  // Format message time
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Get status icon for sent messages
   const getStatusIcon = () => {
     if (!isCurrentUser) return null;
 
+    if (message.isPending) {
+      return <ActivityIndicator size="small" color="rgba(255, 255, 255, 0.8)" />;
+    }
+
+    if (message.isFailed) {
+      return <Ionicons name="close-circle" size={14} color="#EF4444" />;
+    }
+    
     switch (message.status) {
       case MessageStatus.SENT:
         return <Ionicons name="checkmark" size={14} color="#9CA3AF" />;
       case MessageStatus.DELIVERED:
         return <Ionicons name="checkmark-done" size={14} color="#9CA3AF" />;
       case MessageStatus.READ:
-        return <Ionicons name="checkmark-done" size={14} color="#2563EB" />;
+        return <Ionicons name="checkmark-done" size={14} color="#10B981" />;
       default:
         return null;
     }
@@ -51,6 +59,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         style={[
           styles.bubble,
           isCurrentUser ? styles.bubbleCurrentUser : styles.bubbleOtherUser,
+          message.isFailed && styles.bubbleFailed,
         ]}
       >
         <Text style={[styles.messageText, isCurrentUser && styles.messageTextCurrentUser]}>
@@ -66,6 +75,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             {formatTime(message.sentAt)}
           </Text>
           {getStatusIcon()}
+          {message.isFailed && onRetry && (
+            <TouchableOpacity
+              onPress={() => onRetry(message)}
+              style={styles.retryButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="reload" size={14} color="#EF4444" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
@@ -108,6 +126,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderBottomLeftRadius: 4,
   },
+  bubbleFailed: {
+    opacity: 0.7,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
@@ -130,5 +153,9 @@ const styles = StyleSheet.create({
   },
   timeOtherUser: {
     color: '#9CA3AF',
+  },
+  retryButton: {
+    marginLeft: 4,
+    padding: 2,
   },
 });

@@ -1,6 +1,6 @@
 export interface SigninPayload {
-    email: string
-    password: string
+  email: string;
+  password: string;
 }
 
 export interface SignupPayload {
@@ -17,6 +17,6 @@ export interface SignupPayload {
 }
 
 export interface AuthResponse {
-    accessToken: string
-    refreshToken: string
+  accessToken: string;
+  refreshToken: string;
 }

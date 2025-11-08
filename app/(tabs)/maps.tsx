@@ -1,30 +1,35 @@
 import { DriverTrips } from "@/components/map/DriverTrips";
+import LoadingOverlay from "@/components/map/LoadingOverlay";
+import CloseTripModal from "@/components/map/modals/ClosetripModal";
 import { PublishTripModal } from "@/components/map/modals/PublishTripModal";
+import RoleModal from "@/components/map/modals/RoleModal";
 import {
   COVERAGE_THRESHOLD,
   INITIAL_REGION,
   PROXIMITY_METERS,
 } from "@/constants/geolocation.constants";
 import { useAuth } from "@/contexts/auth.context";
+import { useActiveTrips } from "@/hooks/maps/useActiveTrips";
+import { useDriverMap } from "@/hooks/maps/useDriverMap";
+import { usePassengerLocation } from "@/hooks/maps/usePassengerLocation";
+import { useTripHandlers } from "@/hooks/maps/useTripHandlers";
 import { geocode } from "@/lib/api/geocode.service";
 import { createRideRequest } from "@/lib/api/ride-requests.services";
 import {
   LatLngDto,
   TripMatchResponse,
   TripResponse,
-  closeTrip,
-  listTrips,
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
-import { fmtDate, fmtDateTime, fmtTime } from "@/lib/utils/date-format";
+import { Role } from "@/lib/types/user.types";
+import { fmtDate, fmtTime } from "@/lib/utils/date-format";
+import { willOverlap } from "@/lib/utils/trip.utils";
 import * as Location from "expo-location";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
-  Modal,
   Platform,
   StyleSheet,
   Text,
@@ -34,50 +39,29 @@ import {
 } from "react-native";
 
 type RNLatLng = { latitude: number; longitude: number };
-type Role = "driver" | "passenger";
 
 const DRIVER_ID = "11111111-1111-1111-1111-111111111111";
 
 const shortId = (id?: string) => (id ? id.slice(0, 8) : "—");
 
-async function fetchRoute(o: Coord, d: Coord): Promise<Coord[]> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${o.longitude},${o.latitude};${d.longitude},${d.latitude}?overview=full&geometries=geojson`;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json?.routes?.[0]?.geometry?.coordinates) {
-      return json.routes[0].geometry.coordinates.map(
-        ([lng, lat]: [number, number]) => ({ latitude: lat, longitude: lng })
-      );
-    }
-  } catch { }
-  return [o, d];
-}
-
 export default function MapsScreen() {
   const mapRef = useRef<any>(null);
 
-  // ---- état conducteur (tracé local)
-  const [start, setStart] = useState<Coord | null>(null);
-  const [end, setEnd] = useState<Coord | null>(null);
-  const [myPath, setMyPath] = useState<Coord[]>([]);
-
-  // ---- trajets BD (toujours visibles tant que non fermés)
-  const [activeTrips, setActiveTrips] = useState<TripResponse[]>([]);
-
-  // ---- suggestions
+  // ---- suggestions ------
   const [matches, setMatches] = useState<TripMatchResponse[]>([]);
   const [showSheet, setShowSheet] = useState<boolean>(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [visibleSuggestionId, setVisibleSuggestionId] =
-    useState<string | null>(null);
-  const [visibleDriverTripId, setVisibleDriverTripId] =
-    useState<string | null>(null);
+  const [visibleSuggestionId, setVisibleSuggestionId] = useState<string | null>(
+    null
+  );
+  const [visibleDriverTripId, setVisibleDriverTripId] = useState<string | null>(
+    null
+  );
 
-  // ---- recherche destination (passager)
+  // ------- recherche destination -----------
   const [query, setQuery] = useState("");
   const [geoRes, setGeoRes] = useState<any[]>([]);
-  const [mapCenter, setMapCenter] = useState<RNLatLng>({
+  const [mapCenter, setMapCenter] = useState<Coord>({
     latitude: INITIAL_REGION.latitude,
     longitude: INITIAL_REGION.longitude,
   });
@@ -102,13 +86,28 @@ export default function MapsScreen() {
     hasDriver && hasPassenger
   );
 
-  // ---- modals (publication & fermeture)
+  const { activeTrips, setActiveTrips } = useActiveTrips();
+  const { currentPos, setCurrentPos } = usePassengerLocation(role);
+  const { end, myPath, start, onLongPress, openPublish, setEnd, setMyPath } =
+    useDriverMap({
+      role,
+      setMatches,
+      setPublishModal,
+    });
+  const {
+    closeModalTrip,
+    confirmDestinationFromQuery,
+    doCloseTrip,
+    setCloseModalTrip,
+  } = useTripHandlers({
+    end,
+    start,
+    setEnd,
+    setMyPath,
+    setMatches,
+    setActiveTrips,
+  });
 
-  const [closeModalTrip, setCloseModalTrip] = useState<TripResponse | null>(
-    null
-  );
-
-  // Map (mobile only)
   const Maps = useMemo(
     () => (Platform.OS === "web" ? null : require("react-native-maps")),
     []
@@ -117,117 +116,9 @@ export default function MapsScreen() {
   const Marker = Maps?.Marker;
   const Polyline = Maps?.Polyline;
 
-  // ---- chargement trajets actifs + polling 20s
-  useEffect(() => {
-    let mounted = true;
-    const pull = async () => {
-      try {
-        const list = await listTrips();
-        if (mounted) setActiveTrips(list);
-      } catch { }
-    };
-    pull();
-    const id = setInterval(pull, 20000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  // ---- helper: destination depuis la saisie (pas de recherche si < 3 lettres)
-  const confirmDestinationFromQuery = async (): Promise<RNLatLng | null> => {
-    if (end) return end;
-    const q = (query || "").trim();
-    if (q.length < 3) return null;
-    try {
-      const results = await geocode(q);
-      if (results && results.length > 0) {
-        const best = results[0];
-        const dest = {
-          latitude: parseFloat(best.lat),
-          longitude: parseFloat(best.lon),
-        };
-        setEnd(dest);
-        if (start && role === "driver") {
-          const p = await fetchRoute(start, dest);
-          setMyPath(p);
-        }
-        return dest;
-      }
-    } catch { }
-    return null;
-  };
-
-  // ---- interactions carte (driver only)
-  const onLongPress = async (e: any) => {
-    if (role === "passenger") return;
-    const c = e.nativeEvent.coordinate as RNLatLng;
-    if (!start) {
-      setStart(c);
-      setEnd(null);
-      setMyPath([]);
-      setMatches([]);
-    } else if (!end) {
-      setEnd(c);
-      const p = await fetchRoute(start, c);
-      setMyPath(p);
-      setMatches([]);
-    } else {
-      setStart(c);
-      setEnd(null);
-      setMyPath([]);
-      setMatches([]);
-    }
-  };
-
-  // ---- ouverture du popup publier (driver)
-  const openPublish = () => {
-    if (role !== "driver") return;
-    if (!start || !end || myPath.length < 2) {
-      Alert.alert(
-        "Info",
-        "Trace d’abord le départ et l’arrivée (appuis longs)."
-      );
-      return;
-    }
-    setPublishModal(true);
-  };
-
-  // ---- vérif chevauchement des trajets du même conducteur
-  const willOverlap = (depISO: string, arrISO: string) => {
-    const dep = new Date(depISO).getTime();
-    const arr = new Date(arrISO).getTime();
-    const mine = activeTrips.filter((t) => t.driver.uid === userId);
-    for (const t of mine) {
-      const tDep = t.departureAt ? new Date(t.departureAt).getTime() : NaN;
-      const tArr = (t as any).arrivalAt
-        ? new Date((t as any).arrivalAt).getTime()
-        : NaN;
-      if (!isNaN(tDep) && !isNaN(tArr)) {
-        const overlap = dep < tArr && arr > tDep;
-        if (overlap) return true;
-      }
-    }
-    return false;
-  };
-
-  // ---- clic sur un trajet du conducteur -> popup fermeture
   const onOwnTripPress = (t: TripResponse) => {
     if (t.driver.uid !== userId) return;
     setCloseModalTrip(t);
-  };
-
-  const doCloseTrip = async () => {
-    if (!closeModalTrip) return;
-    try {
-      const res = await closeTrip(closeModalTrip.id);
-      setActiveTrips((L) => L.filter((t) => t.id !== res.id));
-      setMatches((M) => M.filter((m) => m.trip.id !== res.id));
-      setCloseModalTrip(null);
-    } catch (e) {
-      Alert.alert("Erreur", "Fermeture impossible pour le moment.");
-      console.log("Close trip error:", (e as Error).message);
-    }
   };
 
   // ⚠️ NE PAS MODIFIER : ta fonction existante
@@ -255,7 +146,7 @@ export default function MapsScreen() {
         edgePadding: { top: 80, left: 50, right: 50, bottom: 120 },
         animated: true,
       });
-    } catch { }
+    } catch {}
   };
 
   // focus trajet conducteur (isole le trajet)
@@ -266,7 +157,6 @@ export default function MapsScreen() {
 
   // find suggestions (passager)
   const findSuggestions = async () => {
-    // N’autoriser la recherche que si destination fixée OU au moins 3 lettres tapées
     let targetEnd: RNLatLng | null = end;
     if (!targetEnd) {
       if ((query || "").trim().length < 3) {
@@ -276,7 +166,7 @@ export default function MapsScreen() {
         );
         return;
       }
-      targetEnd = await confirmDestinationFromQuery();
+      targetEnd = await confirmDestinationFromQuery(query, role);
       if (!targetEnd) {
         Alert.alert(
           "Info",
@@ -301,6 +191,10 @@ export default function MapsScreen() {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude,
       };
+      setCurrentPos({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
 
       const res = await searchTrips({
         start: current,
@@ -340,7 +234,7 @@ export default function MapsScreen() {
       );
       return;
     }
-    const dest = await confirmDestinationFromQuery();
+    const dest = await confirmDestinationFromQuery(query, role);
     if (dest) await findSuggestions();
   };
 
@@ -371,62 +265,15 @@ export default function MapsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ---- Modale choix rôle (si double rôle) */}
-      <Modal
+      <RoleModal
+        role={role}
         visible={roleModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRoleModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Choisir un rôle</Text>
-            <View style={styles.modalRow}>
-              <TouchableOpacity
-                style={[
-                  styles.roleBtn,
-                  role === "driver" && styles.roleBtnActive,
-                ]}
-                onPress={() => {
-                  setRole("driver");
-                  setRoleModal(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.roleTxt,
-                    role === "driver" && styles.roleTxtActive,
-                  ]}
-                >
-                  Conducteur
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.roleBtn,
-                  role === "passenger" && styles.roleBtnActive,
-                ]}
-                onPress={() => {
-                  setRole("passenger");
-                  setRoleModal(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.roleTxt,
-                    role === "passenger" && styles.roleTxtActive,
-                  ]}
-                >
-                  Passager
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        setRole={setRole}
+        setVisible={setRoleModal}
+      />
 
-      {/* Modale publier (sélecteurs heure/sièges) */}
       <PublishTripModal
+        activeTrips={activeTrips}
         driverId={userId}
         end={end}
         myPath={myPath}
@@ -437,42 +284,12 @@ export default function MapsScreen() {
         willOverlap={willOverlap}
       />
 
-      {/* Modale fermeture trajet */}
-      <Modal
-        visible={!!closeModalTrip}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCloseModalTrip(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Fermer ce trajet ?</Text>
-            <Text style={styles.sub}>
-              Départ {fmtDateTime(closeModalTrip?.departureAt)}
-              {(closeModalTrip as any)?.arrivalAt
-                ? ` • Arrivée ${fmtTime((closeModalTrip as any).arrivalAt)}`
-                : ""}
-            </Text>
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-              <TouchableOpacity
-                style={[styles.closeBtn, { flex: 1 }]}
-                onPress={doCloseTrip}
-              >
-                <Text style={styles.closeBtnTxt}>Fermer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.publishBtn, { flex: 1 }]}
-                onPress={() => {
-                  if (closeModalTrip) focusTripPath(closeModalTrip);
-                  setCloseModalTrip(null);
-                }}
-              >
-                <Text style={{ color: "#000", fontWeight: "700" }}>Voir</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <CloseTripModal
+        handleCloseTrip={doCloseTrip}
+        focusTripPath={focusTripPath}
+        closeModalTrip={closeModalTrip}
+        setCloseModalTrip={setCloseModalTrip}
+      />
 
       {/* ---- Barre de recherche (passager) */}
       <View style={styles.searchRow}>
@@ -532,7 +349,6 @@ export default function MapsScreen() {
           setMapCenter({ latitude: r.latitude, longitude: r.longitude })
         }
       >
-
         {role === "driver" &&
           visibleOwnTrips.map((t) => {
             const first = t.path[0];
@@ -608,8 +424,13 @@ export default function MapsScreen() {
           );
         })}
 
-
-
+        {role === "passenger" && currentPos && (
+          <Marker
+            coordinate={currentPos}
+            title="Ma position"
+            pinColor="#1E90FF"
+          />
+        )}
         {role === "passenger" && end && (
           <Marker coordinate={end} title="Ma destination" pinColor="#FFD700" />
         )}
@@ -662,7 +483,10 @@ export default function MapsScreen() {
                     }}
                   >
                     <Text style={styles.sub}>Conducteur : {driverName}</Text>
-                    <TouchableOpacity style={styles.smallBtn} onPress={() => { }}>
+                    <TouchableOpacity
+                      style={styles.smallBtn}
+                      onPress={() => {}}
+                    >
                       <Text style={styles.smallBtnTxt}>Avis</Text>
                     </TouchableOpacity>
                   </View>
@@ -686,9 +510,11 @@ export default function MapsScreen() {
                         focusTripPath(item.trip);
                       }}
                     >
-                      <Text style={{ color: "#000", fontWeight: "700" }}>👁️</Text>
+                      <Text style={{ color: "#000", fontWeight: "700" }}>
+                        👁️
+                      </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.chatBtn} onPress={() => { }}>
+                    <TouchableOpacity style={styles.chatBtn} onPress={() => {}}>
                       <Text style={{ color: "#000", fontWeight: "700" }}>
                         ✉️
                       </Text>
@@ -709,13 +535,7 @@ export default function MapsScreen() {
         </View>
       )}
 
-      {/* ---- Overlay chargement */}
-      {isSearching && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" />
-          <Text style={{ color: "#fff", marginTop: 8 }}>Recherche…</Text>
-        </View>
-      )}
+      {isSearching && <LoadingOverlay />}
     </View>
   );
 }
@@ -765,23 +585,10 @@ const styles = StyleSheet.create({
   },
   row: { paddingVertical: 8 },
 
-  publishBtn: {
-    backgroundColor: "#22cc66",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
   viewBtn: { backgroundColor: "#93c5fd", padding: 10, borderRadius: 10 },
   ask: { backgroundColor: "#22cc66", padding: 10, borderRadius: 10 },
   chatBtn: { backgroundColor: "#fbbf24", padding: 10, borderRadius: 10 },
-  closeBtn: {
-    backgroundColor: "#ef4444",
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  closeBtnTxt: { color: "#fff", fontWeight: "700" },
+
   smallBtn: {
     backgroundColor: "#1f2937",
     paddingHorizontal: 10,
@@ -789,18 +596,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   smallBtnTxt: { color: "#93c5fd", fontWeight: "700" },
-
-  roleBtn: {
-    backgroundColor: "#1f2937",
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  roleBtnActive: { backgroundColor: "#22cc66" },
-  roleTxt: { color: "#cbd5e1", fontWeight: "700" },
-  roleTxtActive: { color: "#000" },
 
   sheet: {
     position: "absolute",
@@ -827,41 +622,4 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sub: { color: "#cbd5e1", marginTop: 2 },
-
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalCard: {
-    backgroundColor: "#0b1220",
-    padding: 16,
-    borderRadius: 14,
-    width: "85%",
-  },
-  publishCard: {
-    backgroundColor: "#0b1220",
-    padding: 16,
-    borderRadius: 14,
-    width: "92%",
-  },
-  modalTitle: {
-    color: "#fff",
-    fontWeight: "700",
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  modalRow: { flexDirection: "row", gap: 10 },
-
-  loadingOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    top: 0,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });

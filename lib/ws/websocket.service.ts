@@ -40,7 +40,6 @@ export class WebSocketService {
       console.log('[WebSocket] Already connected or connecting');
       return Promise.resolve();
     }
-    console.log('token', accessToken)
     this.isConnecting = true;
     this.userId = userId;
     this.onConnectedCallback = callbacks?.onConnected;
