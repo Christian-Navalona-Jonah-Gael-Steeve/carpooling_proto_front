@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/auth.context";
 import { useActiveTrips } from "@/hooks/maps/useActiveTrips";
 import { useDriverMap } from "@/hooks/maps/useDriverMap";
 import { usePassengerLocation } from "@/hooks/maps/usePassengerLocation";
+import { useTripHandlers } from "@/hooks/maps/useTripHandlers";
 import { geocode } from "@/lib/api/geocode.service";
 import { createRideRequest } from "@/lib/api/ride-requests.services";
 import {
@@ -19,7 +20,6 @@ import {
   TripMatchResponse,
   TripResponse,
   closeTrip,
-  fetchRoute,
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
@@ -98,6 +98,12 @@ export default function MapsScreen() {
       setMatches,
       setPublishModal,
     });
+  const { confirmDestinationFromQuery } = useTripHandlers({
+    end,
+    start,
+    setEnd,
+    setMyPath,
+  });
 
   const Maps = useMemo(
     () => (Platform.OS === "web" ? null : require("react-native-maps")),
@@ -106,38 +112,6 @@ export default function MapsScreen() {
   const MapView = Maps?.default;
   const Marker = Maps?.Marker;
   const Polyline = Maps?.Polyline;
-
-  /**
-   * Given a query string, try to find the destination coordinates
-   * using geocoding. If the query is empty or too short, return null.
-   * If geocoding is successful, set the end coordinates and if the start
-   * coordinates are already set and the user is a driver, fetch the route
-   * between the start and end coordinates and set it as the myPath.
-   * @returns {Promise<Coord | null>} The destination coordinates or null if
-   * the query is empty or too short, or if geocoding fails.
-   */
-  const confirmDestinationFromQuery = async (): Promise<Coord | null> => {
-    if (end) return end;
-    const q = (query || "").trim();
-    if (q.length < 3) return null;
-    try {
-      const results = await geocode(q);
-      if (results && results.length > 0) {
-        const best = results[0];
-        const dest = {
-          latitude: parseFloat(best.lat),
-          longitude: parseFloat(best.lon),
-        };
-        setEnd(dest);
-        if (start && role === "driver") {
-          const p = await fetchRoute(start, dest);
-          setMyPath(p);
-        }
-        return dest;
-      }
-    } catch {}
-    return null;
-  };
 
   const onOwnTripPress = (t: TripResponse) => {
     if (t.driver.uid !== userId) return;
@@ -202,7 +176,7 @@ export default function MapsScreen() {
         );
         return;
       }
-      targetEnd = await confirmDestinationFromQuery();
+      targetEnd = await confirmDestinationFromQuery(query, role);
       if (!targetEnd) {
         Alert.alert(
           "Info",
@@ -270,7 +244,7 @@ export default function MapsScreen() {
       );
       return;
     }
-    const dest = await confirmDestinationFromQuery();
+    const dest = await confirmDestinationFromQuery(query, role);
     if (dest) await findSuggestions();
   };
 
