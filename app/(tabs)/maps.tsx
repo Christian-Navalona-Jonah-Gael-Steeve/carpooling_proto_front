@@ -9,7 +9,9 @@ import {
   PROXIMITY_METERS,
 } from "@/constants/geolocation.constants";
 import { useAuth } from "@/contexts/auth.context";
+import { useActiveTrips } from "@/hooks/maps/useActiveTrips";
 import { useDriverMap } from "@/hooks/maps/useDriverMap";
+import { usePassengerLocation } from "@/hooks/maps/usePassengerLocation";
 import { geocode } from "@/lib/api/geocode.service";
 import { createRideRequest } from "@/lib/api/ride-requests.services";
 import {
@@ -18,7 +20,6 @@ import {
   TripResponse,
   closeTrip,
   fetchRoute,
-  listTrips,
   searchTrips,
 } from "@/lib/api/trips.service";
 import { Coord } from "@/lib/types/coord.types";
@@ -26,7 +27,7 @@ import { Role } from "@/lib/types/user.types";
 import { fmtDate, fmtTime } from "@/lib/utils/date-format";
 import { willOverlap } from "@/lib/utils/trip.utils";
 import * as Location from "expo-location";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -47,10 +48,7 @@ const shortId = (id?: string) => (id ? id.slice(0, 8) : "—");
 export default function MapsScreen() {
   const mapRef = useRef<any>(null);
 
-  // ---- trajets BD (toujours visibles tant que non fermés)
-  const [activeTrips, setActiveTrips] = useState<TripResponse[]>([]);
-
-  // ---- suggestions
+  // ---- suggestions ------
   const [matches, setMatches] = useState<TripMatchResponse[]>([]);
   const [showSheet, setShowSheet] = useState<boolean>(true);
   const [isSearching, setIsSearching] = useState(false);
@@ -61,7 +59,7 @@ export default function MapsScreen() {
     null
   );
 
-  // ---- recherche destination (passager)
+  // ------- recherche destination -----------
   const [query, setQuery] = useState("");
   const [geoRes, setGeoRes] = useState<any[]>([]);
   const [mapCenter, setMapCenter] = useState<Coord>({
@@ -70,7 +68,6 @@ export default function MapsScreen() {
   });
 
   const [publishModal, setPublishModal] = useState(false);
-  const [currentPos, setCurrentPos] = useState<Coord | null>(null);
 
   // ---- rôles
   const { user } = useAuth();
@@ -89,7 +86,12 @@ export default function MapsScreen() {
   const [roleModal, setRoleModal] = useState<boolean>(
     hasDriver && hasPassenger
   );
+  const [closeModalTrip, setCloseModalTrip] = useState<TripResponse | null>(
+    null
+  );
 
+  const { activeTrips, setActiveTrips } = useActiveTrips();
+  const { currentPos, setCurrentPos } = usePassengerLocation(role);
   const { end, myPath, start, onLongPress, openPublish, setEnd, setMyPath } =
     useDriverMap({
       role,
@@ -97,13 +99,6 @@ export default function MapsScreen() {
       setPublishModal,
     });
 
-  // ---- modals (publication & fermeture)
-
-  const [closeModalTrip, setCloseModalTrip] = useState<TripResponse | null>(
-    null
-  );
-
-  // Map (mobile only)
   const Maps = useMemo(
     () => (Platform.OS === "web" ? null : require("react-native-maps")),
     []
@@ -112,46 +107,16 @@ export default function MapsScreen() {
   const Marker = Maps?.Marker;
   const Polyline = Maps?.Polyline;
 
-  // ---- position actuelle (passager)
-  useEffect(() => {
-    let mounted = true;
-    if (role !== "passenger") return;
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") return;
-        const pos = await Location.getCurrentPositionAsync({});
-        if (!mounted) return;
-        setCurrentPos({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
-      } catch {}
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [role]);
-
-  // ---- chargement trajets actifs + polling 20s
-  useEffect(() => {
-    let mounted = true;
-    const pull = async () => {
-      try {
-        const list = await listTrips();
-        if (mounted) setActiveTrips(list);
-      } catch {}
-    };
-    pull();
-    const id = setInterval(pull, 20000);
-    return () => {
-      mounted = false;
-      clearInterval(id);
-    };
-  }, []);
-
-  // ---- helper: destination depuis la saisie (pas de recherche si < 3 lettres)
-  const confirmDestinationFromQuery = async (): Promise<RNLatLng | null> => {
+  /**
+   * Given a query string, try to find the destination coordinates
+   * using geocoding. If the query is empty or too short, return null.
+   * If geocoding is successful, set the end coordinates and if the start
+   * coordinates are already set and the user is a driver, fetch the route
+   * between the start and end coordinates and set it as the myPath.
+   * @returns {Promise<Coord | null>} The destination coordinates or null if
+   * the query is empty or too short, or if geocoding fails.
+   */
+  const confirmDestinationFromQuery = async (): Promise<Coord | null> => {
     if (end) return end;
     const q = (query || "").trim();
     if (q.length < 3) return null;
@@ -174,7 +139,6 @@ export default function MapsScreen() {
     return null;
   };
 
-  // ---- clic sur un trajet du conducteur -> popup fermeture
   const onOwnTripPress = (t: TripResponse) => {
     if (t.driver.uid !== userId) return;
     setCloseModalTrip(t);
