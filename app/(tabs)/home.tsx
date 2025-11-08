@@ -1,4 +1,3 @@
-import { ReviewSection } from "@/components/reviews/ReviewSection";
 import { useAuth } from "@/contexts/auth.context";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useRouter } from "expo-router";
@@ -43,15 +42,6 @@ export default function HomeScreen() {
         <Text style={styles.subtitle}>
           Vous êtes connecté à votre compte de covoiturage.
         </Text>
-
-        <View style={styles.reviewSectionContainer}>
-          <ReviewSection 
-            driverId={TEST_DRIVER_ID}
-            driverName={TEST_DRIVER_NAME}
-            compact={false}
-          />
-        </View>
-
       </View>
     </View>
   );

@@ -20,7 +20,7 @@ interface ReviewModalProps {
   driverId: string;
   driverName: string;
   existingReview?: {
-    id: number;
+    id: string;
     rating: number;
     comment?: string;
   };
@@ -44,38 +44,55 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
   
   const isLoading = createReviewMutation.isPending || updateReviewMutation.isPending;
 
-  const handleSubmit = async () => {
+ const handleSubmit = async () => {
     if (rating === 0) {
-      Alert.alert('Erreur', 'Veuillez donner une note');
-      return;
+        Alert.alert('Erreur', 'Veuillez donner une note');
+        return;
     }
 
     if (!user) {
-      Alert.alert('Erreur', 'Vous devez être connecté pour donner un avis');
-      return;
+        Alert.alert('Erreur', 'Vous devez être connecté pour donner un avis');
+        return;
     }
 
     try {
-      if (isEditing && existingReview) {
-        await updateReviewMutation.mutateAsync({
-          reviewId: existingReview.id,
-          data: { rating, comment }
+        console.log('Envoi des données:', {
+            reviewerId: user.uid,
+            driverId,
+            rating,
+            comment: comment || undefined
         });
-      } else {
-        await createReviewMutation.mutateAsync({
-          reviewerId: user.uid, 
-          driverId,
-          rating,
-          comment: comment || undefined,
+
+        if (isEditing && existingReview) {
+            await updateReviewMutation.mutateAsync({
+                reviewId: existingReview.id,
+                data: { 
+                    rating, 
+                    comment: comment || undefined 
+                }
+            });
+        } else {
+            await createReviewMutation.mutateAsync({
+                reviewerId: user.uid, 
+                driverId,
+                rating,
+                comment: comment || undefined,
+            });
+        }
+        
+        setTimeout(() => {
+    onClose();
+    resetForm();
+  }, 100);
+    } catch (error: any) {
+        console.error('Erreur détaillée création avis:', {
+            message: error.message,
+            stack: error.stack,
+            data: error.response?.data
         });
-      }
-      
-      onClose();
-      resetForm();
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de soumettre votre avis');
+        Alert.alert('Erreur', error.message || 'Impossible de soumettre votre avis');
     }
-  };
+};
 
   const resetForm = () => {
     setRating(0);
