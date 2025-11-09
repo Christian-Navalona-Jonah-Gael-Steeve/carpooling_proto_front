@@ -514,7 +514,7 @@ export default function MapsScreen() {
           );
         })}
 
-        {role === "passenger" && currentPos && (
+        {currentPos && (
           <Marker
             coordinate={currentPos}
             title="Ma position"
