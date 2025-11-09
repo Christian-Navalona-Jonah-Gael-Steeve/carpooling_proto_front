@@ -7,7 +7,6 @@ export const usePassengerLocation = (role: Role) => {
   const [currentPos, setCurrentPos] = useState<Coord | null>(null);
   useEffect(() => {
     let mounted = true;
-    if (role !== "passenger") return;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
