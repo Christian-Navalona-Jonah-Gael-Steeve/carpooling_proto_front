@@ -31,6 +31,9 @@ interface WebSocketContextType {
   onStatusUpdate: (
     handler: (status: MessageStatusPayload) => void
   ) => () => void;
+  onTripEvent: (
+    handler: (event: any) => void
+  ) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(
@@ -51,11 +54,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     ackHandlers: Set<(ack: MessageAckPayload) => void>;
     conversationHandlers: Set<(update: ConversationUpdatePayload) => void>;
     statusHandlers: Set<(status: MessageStatusPayload) => void>;
+    tripHandlers: Set<(event: any) => void>;
   }>({
     messageHandlers: new Set(),
     ackHandlers: new Set(),
     conversationHandlers: new Set(),
     statusHandlers: new Set(),
+    tripHandlers: new Set(),
   });
 
   // Connect to WebSocket when user is authenticated
@@ -118,6 +123,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
               );
             }
           );
+
+          // Trip topic events (broadcast)
+          webSocketService.subscribeToTripEvents((evt: any) => {
+            handlersRef.current.tripHandlers.forEach((h) => h(evt));
+          });
         } catch (error) {
           console.error("[WebSocket Context] Failed to connect:", error);
           setIsConnected(false);
@@ -205,6 +215,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     []
   );
 
+  // Register trip event handler
+  const onTripEvent = useCallback((handler: (event: any) => void) => {
+    handlersRef.current.tripHandlers.add(handler);
+    return () => {
+      handlersRef.current.tripHandlers.delete(handler);
+    };
+  }, []);
+
   return (
     <WebSocketContext.Provider
       value={{
@@ -215,6 +233,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         onAckReceived,
         onConversationUpdate,
         onStatusUpdate,
+        onTripEvent,
       }}
     >
       {children}

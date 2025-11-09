@@ -1,5 +1,6 @@
 import { DriverTrips } from "@/components/map/DriverTrips";
 import LoadingOverlay from "@/components/map/LoadingOverlay";
+import ChooseTripTypeModal from "@/components/map/modals/ChooseTripTypeModal";
 import CloseTripModal from "@/components/map/modals/ClosetripModal";
 import { PublishTripModal } from "@/components/map/modals/PublishTripModal";
 import RoleModal from "@/components/map/modals/RoleModal";
@@ -9,6 +10,7 @@ import {
   PROXIMITY_METERS,
 } from "@/constants/geolocation.constants";
 import { useAuth } from "@/contexts/auth.context";
+import { useWebSocket } from "@/contexts/websocket.context";
 import { useActiveTrips } from "@/hooks/maps/useActiveTrips";
 import { useDriverMap } from "@/hooks/maps/useDriverMap";
 import { usePassengerLocation } from "@/hooks/maps/usePassengerLocation";
@@ -26,7 +28,7 @@ import { Role } from "@/lib/types/user.types";
 import { fmtDate, fmtTime } from "@/lib/utils/date-format";
 import { willOverlap } from "@/lib/utils/trip.utils";
 import * as Location from "expo-location";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -67,6 +69,9 @@ export default function MapsScreen() {
   });
 
   const [publishModal, setPublishModal] = useState(false);
+  const [chooseTypeModal, setChooseTypeModal] = useState(false);
+  const [initialMode, setInitialMode] = useState<"planned" | "immediate" | null>(null);
+  const { onTripEvent } = useWebSocket();
 
   // ---- rôles
   const { user } = useAuth();
@@ -92,7 +97,7 @@ export default function MapsScreen() {
     useDriverMap({
       role,
       setMatches,
-      setPublishModal,
+      setPublishModal: setChooseTypeModal,
     });
   const {
     closeModalTrip,
@@ -121,6 +126,50 @@ export default function MapsScreen() {
     setCloseModalTrip(t);
   };
 
+  // Trip event notifications for passengers nearby
+  // useEffect(() => {
+  //   if (role !== "passenger") return;
+  //   const off = onTripEvent((evt: any) => {
+  //     try {
+  //       const trip: TripResponse = evt?.trip || evt;
+  //       const type = evt?.type || "NEW";
+  //       if (!trip?.start || !currentPos) return;
+  //       const d = distanceMeters(
+  //         currentPos.latitude,
+  //         currentPos.longitude,
+  //         trip.start.lat,
+  //         trip.start.lng
+  //       );
+  //       if (d <= PROXIMITY_METERS) {
+  //         Alert.alert(
+  //           type === "IMMEDIATE" ? "Un conducteur part bientôt" : "Nouveau trajet proche",
+  //           "Voir ce trajet sur la carte ?",
+  //           [
+  //             { text: "Ignorer" },
+  //             { text: "Voir", onPress: () => focusTripPath(trip) },
+  //           ]
+  //         );
+  //       }
+  //     } catch { }
+  //   });
+  //   return () => {
+  //     if (off) off();
+  //   };
+  // }, [role, currentPos]);
+
+  // function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  //   const R = 6371000;
+  //   const toRad = (x: number) => (x * Math.PI) / 180;
+  //   const dLat = toRad(lat2 - lat1);
+  //   const dLon = toRad(lon2 - lon1);
+  //   const a =
+  //     Math.sin(dLat / 2) ** 2 +
+  //     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+  //     Math.sin(dLon / 2) ** 2;
+  //   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  //   return R * c;
+  // }
+
   // ⚠️ NE PAS MODIFIER : ta fonction existante
   const requestCarpool = async (tripId: string) => {
     if (!start || !end) return;
@@ -146,7 +195,7 @@ export default function MapsScreen() {
         edgePadding: { top: 80, left: 50, right: 50, bottom: 120 },
         animated: true,
       });
-    } catch {}
+    } catch { }
   };
 
   // focus trajet conducteur (isole le trajet)
@@ -263,8 +312,78 @@ export default function MapsScreen() {
     ? ownActiveTrips.filter((t) => t.id === visibleDriverTripId)
     : ownActiveTrips;
 
+  useEffect(() => {
+    if (role !== "passenger") return;
+    const off = onTripEvent((evt: any) => {
+      try {
+        const trip: TripResponse = evt?.trip || evt;
+        const type = evt?.type || "NEW";
+        if (!trip?.start || !currentPos) return;
+        const d = distanceMeters(
+          currentPos.latitude,
+          currentPos.longitude,
+          trip.start.lat,
+          trip.start.lng
+        );
+        if (d <= PROXIMITY_METERS) {
+          Alert.alert(
+            type === "IMMEDIATE" ? "Un conducteur part bientôt" : "Nouveau trajet proche",
+            "Voir ce trajet sur la carte ?",
+            [
+              { text: "Ignorer" },
+              {
+                text: "Voir",
+                onPress: () => {
+                  upsertSuggestionFromTrip(trip);
+                },
+              },
+            ]
+          );
+        }
+      } catch { }
+    });
+    return () => {
+      if (off) off();
+    };
+  }, [role, currentPos]);
+
+  function upsertSuggestionFromTrip(trip: TripResponse) {
+    setMatches((prev) => {
+      const exists = prev.some((m) => m.trip.id === trip.id);
+      const next: TripMatchResponse[] = exists
+        ? prev.map((m) => (m.trip.id === trip.id ? { ...m, trip } : m))
+        : [{ trip, startDist: 0, endDist: 0 } as TripMatchResponse, ...prev];
+      return next;
+    });
+    setVisibleSuggestionId(trip.id);
+    setShowSheet(true);
+    focusTripPath(trip);
+  }
+
+  function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+    const R = 6371000;
+    const toRad = (x: number) => (x * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
   return (
     <View style={styles.container}>
+      <ChooseTripTypeModal
+        visible={chooseTypeModal}
+        onPick={(m) => {
+          setInitialMode(m);
+          setChooseTypeModal(false);
+          setPublishModal(true);
+        }}
+        onClose={() => setChooseTypeModal(false)}
+      />
       <RoleModal
         role={role}
         visible={roleModal}
@@ -282,6 +401,7 @@ export default function MapsScreen() {
         setActiveTrips={setActiveTrips}
         setPublishModal={setPublishModal}
         willOverlap={willOverlap}
+        initialMode={initialMode || undefined}
       />
 
       <CloseTripModal
@@ -485,7 +605,7 @@ export default function MapsScreen() {
                     <Text style={styles.sub}>Conducteur : {driverName}</Text>
                     <TouchableOpacity
                       style={styles.smallBtn}
-                      onPress={() => {}}
+                      onPress={() => { }}
                     >
                       <Text style={styles.smallBtnTxt}>Avis</Text>
                     </TouchableOpacity>
@@ -514,7 +634,7 @@ export default function MapsScreen() {
                         👁️
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.chatBtn} onPress={() => {}}>
+                    <TouchableOpacity style={styles.chatBtn} onPress={() => { }}>
                       <Text style={{ color: "#000", fontWeight: "700" }}>
                         ✉️
                       </Text>
