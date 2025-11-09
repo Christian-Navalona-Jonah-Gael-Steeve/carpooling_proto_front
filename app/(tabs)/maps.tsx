@@ -571,12 +571,6 @@ export default function MapsScreen() {
                     }}
                   >
                     <Text style={styles.sub}>Conducteur : {driverName}</Text>
-                    <TouchableOpacity
-                      style={styles.smallBtn}
-                      onPress={() => { }}
-                    >
-                      <Text style={styles.smallBtnTxt}>Avis</Text>
-                    </TouchableOpacity>
                   </View>
                   <Text style={styles.sub}>
                     Départ : {fmtDate(item.trip.departureAt)} •{" "}
@@ -605,14 +599,6 @@ export default function MapsScreen() {
                     <TouchableOpacity style={styles.chatBtn} onPress={() => { }}>
                       <Text style={{ color: "#000", fontWeight: "700" }}>
                         ✉️
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.ask}
-                      onPress={() => requestCarpool(item.trip.id)}
-                    >
-                      <Text style={{ color: "#000", fontWeight: "700" }}>
-                        Demander
                       </Text>
                     </TouchableOpacity>
                   </View>
