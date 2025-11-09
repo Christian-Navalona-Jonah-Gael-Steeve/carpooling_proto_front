@@ -31,6 +31,20 @@ export default function TabLayout() {
             }}
           >
             <Tabs.Screen
+              name="home"
+              options={{
+                title: "Accueil",
+                tabBarIcon: ({ size, color }) => (
+                  <Ionicons
+                    name="home-outline"
+                    size={size}
+                    color={color}
+                    strokeWidth={2}
+                  />
+                ),
+              }}
+            />
+            <Tabs.Screen
               name="maps"
               options={{
                 title: "Maps",
@@ -44,35 +58,21 @@ export default function TabLayout() {
                 ),
               }}
             />
+            <Tabs.Screen
+              name="chats"
+              options={{
+                title: "Chats",
+                tabBarIcon: ({ size, color }) => (
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={size}
+                    color={color}
+                    strokeWidth={2}
+                  />
+                ),
+              }}
+            />
           </Tabs>
-          <Tabs.Screen
-            name="home"
-            options={{
-              title: "Accueil",
-              tabBarIcon: ({ size, color }) => (
-                <Ionicons
-                  name="add-circle-outline"
-                  size={size}
-                  color={color}
-                  strokeWidth={2}
-                />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="chats"
-            options={{
-              title: "Chats",
-              tabBarIcon: ({ size, color }) => (
-                <Ionicons
-                  name="chatbubbles-outline"
-                  size={size}
-                  color={color}
-                  strokeWidth={2}
-                />
-              ),
-            }}
-          />
         </SafeAreaView>
       </WebSocketProvider>
     </ProtectedRoute>

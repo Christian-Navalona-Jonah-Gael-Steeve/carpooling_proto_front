@@ -23,14 +23,18 @@ import {
   View,
 } from 'react-native';
 import { ReviewSection } from "../reviews/ReviewSection";
+import { useGetUserById } from "@/hooks/queries/user.queries";
+import { IUser } from "@/lib/types/user.types";
 
 interface ConversationDetailProps {
   conversationId: number;
+  driverId?: string;
   onBack: () => void;
 }
 
 export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   conversationId,
+  driverId,
   onBack,
 }) => {
   const { user } = useAuth();
@@ -39,10 +43,11 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   const flatListRef = useRef<FlatList>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
-  // Get conversation details
+  // Get conversation details (automatically disabled if conversationId is 0)
   const { data: conversation } = useGetConversation(conversationId);
+  const { data: driver } = useGetUserById(driverId);
 
-  // Get messages with infinite scroll
+  // Get messages with infinite scroll (automatically disabled if conversationId is 0)
   const {
     data: messagesData,
     isLoading,
@@ -69,9 +74,20 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     return Array.from(uniqueMessages.values()).reverse();
   }, [messagesData?.pages]);
 
-  const otherParticipant = conversation?.participants.find(
-    (p) => p.uid !== user?.uid
-  );
+  // For new conversations (id=0), use driverId; otherwise get from conversation
+  const otherParticipant = React.useMemo(() => {
+    if (conversationId === 0 && driverId && driver) {
+      // Return a minimal participant object for new conversations
+      if(driver) return driver;
+      return {
+        uid: driverId,
+        email: "",
+        firstName: "",
+        lastName: "",
+      } as IUser
+    }
+    return conversation?.participants.find((p) => p.uid !== user?.uid);
+  }, [conversationId, driver, driverId, conversation, user]);
 
   // Scroll to bottom on initial load and when new messages arrive
   useEffect(() => {
@@ -105,9 +121,14 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   }, [conversationId, messages.length, user, markAsRead, messages]);
 
   const handleSend = (content: string) => {
-    if (!otherParticipant || !conversationId) return;
+    if (!otherParticipant) return;
 
-    sendMessage(otherParticipant.uid, content, conversationId);
+    // For new conversations (id=0), pass undefined to let backend create it
+    sendMessage(
+      otherParticipant.uid,
+      content,
+      conversationId === 0 ? undefined : conversationId
+    );
 
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
