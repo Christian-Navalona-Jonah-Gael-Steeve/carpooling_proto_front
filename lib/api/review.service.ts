@@ -1,9 +1,12 @@
 import { CreateReviewRequest, DriverRating, IReview, UpdateReviewRequest } from '@/lib/types/review.types';
 
 export class ReviewService {
-static async createReview(data: CreateReviewRequest): Promise<IReview> {
+
+private static readonly BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+  static async createReview(data: CreateReviewRequest): Promise<IReview> {
     try {
-        const response = await fetch('http://10.78.221.229:8080/api/reviews', {
+      const response = await fetch(`${this.BASE_URL}/reviews`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -37,7 +40,7 @@ static async createReview(data: CreateReviewRequest): Promise<IReview> {
 
 static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<IReview> {
     try {
-        const response = await fetch(`http://10.78.221.229:8080/api/reviews/${reviewId}`, {
+        const response = await fetch(`${this.BASE_URL}/reviews/${reviewId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -70,7 +73,7 @@ static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<
 }
     static async getDriverReviews(driverId: string): Promise<IReview[]> {
         try {
-            const response = await fetch(`http://10.78.221.229:8080/api/reviews/driver/${driverId}`);
+            const response = await fetch(`${this.BASE_URL}/reviews/driver/${driverId}`);
             
             if (!response.ok) {
                 return [];
@@ -84,7 +87,7 @@ static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<
 
     static async getDriverRating(driverId: string): Promise<DriverRating> {
         try {
-            const response = await fetch(`http://10.78.221.229:8080/api/reviews/user/${driverId}/rating`);
+            const response = await fetch(`${this.BASE_URL}/reviews/user/${driverId}/rating`);
             
             if (!response.ok) {
                 return {
@@ -108,7 +111,7 @@ static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<
 
     static async getUserReviewForDriver(driverId: string, reviewerId: string): Promise<IReview | null> {
         try {
-            const response = await fetch(`http://10.78.221.229:8080/api/reviews/driver/${driverId}/reviewer/${reviewerId}`);
+            const response = await fetch(`${this.BASE_URL}/reviews/driver/${driverId}/reviewer/${reviewerId}`);
             
             if (!response.ok) {
                 return null;
