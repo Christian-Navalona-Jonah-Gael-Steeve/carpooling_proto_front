@@ -12,14 +12,26 @@
 ## Première Connexion
 
 ### Écran de Connexion
-*Interface d'authentification avec champs email et mot de passe*
+
+
+![Aperçu de l'application](images/Connexion.jpg)
+
+Interface d'authentification avec champs email et mot de passe
 
 ### Création de Compte
 1. **Lancez l'application**
 2. **Cliquez sur "S'inscrire"**
 3. **Remplissez le formulaire :**
 
-*Formulaire d'inscription avec tous les champs requis*
+![Aperçu de l'application](images/1.jpg)
+![Aperçu de l'application](images/2.jpg)
+![Aperçu de l'application](images/3.jpg)
+![Aperçu de l'application](images/4.jpg)
+![Aperçu de l'application](images/5.jpg)
+![Aperçu de l'application](images/6.jpg)
+![Aperçu de l'application](images/7.jpg)
+
+Formulaire d'inscription avec tous les champs requis
 
 ```json
 {
@@ -39,38 +51,31 @@
 ```
 
 ### Dashboard après Connexion
-*Écran d'accueil après connexion réussie avec navigation*
+
+![Aperçu de l'application](images/8.jpg)
+
+Écran d'accueil après connexion réussie avec navigation
 
 ---
 
 ## Recherche de Trajets
 
 ### Interface de Recherche
-*Écran de recherche avec carte et filtres*
+
+![Aperçu de l'application](images/9.jpg)
+
+Écran de recherche avec carte et filtres
 
 ### Résultats de Recherche
-*Liste des trajets disponibles avec informations détaillées*
+![Aperçu de l'application](images/10.jpg)
 
-**Fonctionnalités de recherche :**
-*Recherche de trajet pour le covoiturage*
-
-### Détails d'un Trajet
-*Page détaillée d'un trajet sélectionné*
----
+Liste des trajets disponibles avec informations détaillées
 
 ## Proposer un Trajet
 
 ### Création de Trajet
-*Formulaire de création d'un nouveau trajet*
-
-**Champs à remplir :**
-*les chanmps à remplir pour la création de trajet*
-
-### Interface Carte
-*Carte interactive pour sélectionner départ/arrivée*
-
-### Gestion des Trajets
-*Liste des trajets que vous avez proposés*
+![Aperçu de l'application](images/11.jpg)
+Formulaire de création d'un nouveau trajet
 
 ---
 
@@ -84,7 +89,8 @@
 - Statut des messages
 
 ### Interface de Chat
-*Interface de discussion en temps réel*
+![Aperçu de l'application](images/12.jpg)
+Interface de discussion en temps réel
 
 ### Envoi de Message
 *Zone de saisie de message avec bouton d'envoi*
@@ -98,14 +104,14 @@
 
 ## Système d'Évaluation
 
-### Interface d'Évaluation
-*Écran de notation avec système d'étoiles*
+### Interface d'Évaluation*
+![Aperçu de l'application](images/12.jpg)
 
-### Création d'Avis
-*Formulaire de création d'un avis*
+Écran de notation avec système d'étoiles
 
 ### Profil avec Notes
-*Page de profil affichant la note moyenne*
+![Aperçu de l'application](images/9.jpg)
+Page de profil affichant la note moyenne
 
 **Informations affichées :**
 - Note moyenne (ex: 4/5)
