@@ -6,6 +6,7 @@ import { useFormik } from "formik";
 import React, { useRef, useState } from "react";
 import {
   Alert,
+  Modal,
   ScrollView,
   Text,
   TextInput,
@@ -118,8 +119,10 @@ export default function SignupScreen() {
   const [code, setCode] = useState(["", "", "", "", "", ""]);
   const inputs = useRef<Array<TextInput | null>>([]);
   const [is_step_4_loading, setIsStep4Loading] = useState(false);
+  const [is_step_5_loading, setIsStep5Loading] = useState(false);
   const [is_step_4_done, setIsStep4Done] = useState(false);
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo en bytes
+  const MAX_FILE_SIZE = 5 * 1024 * 1024;
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const { values, setFieldValue } = useFormik<SignupPayload>({
     initialValues: {
@@ -137,11 +140,25 @@ export default function SignupScreen() {
     onSubmit: () => { },
   });
 
+  const cancelSignup = () => {
+    setShowCancelModal(true); // Ouvre la confirmation
+  };
+
+  const confirmCancel = () => {
+    setIsStep4Loading(false);
+    setShowCancelModal(false);
+    router.push("/(auth)/login");
+  };
+
+  const closeModal = () => {
+    setShowCancelModal(false);
+  };
+
   // === VALIDATION PAR ÉTAPE ===
   const isStepValid = (): boolean => {
     switch (step) {
       case 1:
-        return gender !== null && values.lastName.trim() !== "" && values.email.trim() !== "" && values.phoneNumber.trim() !== "";
+        return gender !== null && values.lastName.trim() !== "" && values.email.trim() !== "" && values.phoneNumber.trim() !== "" && values.city.trim() !== "";
       case 2:
         return pdp !== null;
       case 3:
@@ -291,6 +308,7 @@ export default function SignupScreen() {
 
   // === VERIFICATION CODE ===
   const handleVerifyCode = async () => {
+    setIsStep5Loading(true);
     const codeStr = code.join("");
     try {
       await verifyCode(`${API_BASE_URL}/auth/verify-code`, values.email, codeStr);
@@ -298,6 +316,9 @@ export default function SignupScreen() {
       router.replace("/(auth)/login");
     } catch (err: any) {
       Alert.alert("Erreur", err.message);
+    }
+    finally {
+      setIsStep5Loading(false);
     }
   };
 
@@ -363,6 +384,7 @@ export default function SignupScreen() {
           inputs={inputs}
           handleCodeChange={handleCodeChange}
           isStep4Done={is_step_4_done}
+          email={values.email}
         />
       )}
 
@@ -370,11 +392,20 @@ export default function SignupScreen() {
       {/* NAVIGATION */}
       <View style={styles.navigation}>
         {step > 1 ? (
-          <TouchableOpacity onPress={prevStep} style={styles.backBtn}>
-            <Text style={{ color: "#000" }}>Retour</Text>
-          </TouchableOpacity>
+          is_step_4_loading ? (
+            <TouchableOpacity onPress={cancelSignup} style={[styles.backBtn, { backgroundColor: "#E53E3E" }]}>
+              <Text style={{ color: "#fff" }}>Annuler</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={prevStep} style={styles.backBtn}>
+              <Text style={{ color: "#000" }}>Retour</Text>
+            </TouchableOpacity>
+          )
         ) : (
-          <View style={{ width: 100 }} />
+          // <TouchableOpacity onPress={cancelSignup} style={[styles.backBtn, { backgroundColor: "#E53E3E" }]}>
+          <TouchableOpacity onPress={() => router.push("/(auth)/login")} style={[styles.backBtn, { backgroundColor: "#E53E3E" }]}>
+            <Text style={{ color: "#fff" }}>Annuler</Text>
+          </TouchableOpacity>
         )}
 
         {/* Bouton suivant ou terminer */}
@@ -398,10 +429,35 @@ export default function SignupScreen() {
             style={[styles.finishBtn, !isStepValid() && { backgroundColor: "#A0AEC0" }]}
             disabled={!isStepValid()}
           >
-            <Text style={{ color: "#fff" }}>Vérifier</Text>
+            <Text style={{ color: "#fff" }}>
+              {is_step_5_loading ? "Vérification en cours . . ." : "Vérifier"}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
+      {/* MODAL DE CONFIRMATION */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Annuler l’inscription ?</Text>
+            <Text style={styles.modalText}>Voulez-vous vraiment annuler votre inscription ?</Text>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={closeModal} style={styles.cancelBtn}>
+                <Text style={{ color: "#2B6CB0" }}>Non</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={confirmCancel} style={styles.confirmBtn}>
+                <Text style={{ color: "#fff" }}>Oui, annuler</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
