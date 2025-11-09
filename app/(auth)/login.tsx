@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import { useFormik } from "formik";
 import React, { useState } from "react";
 import {
+  Alert,
   StyleSheet,
   Text,
   TextInput,
@@ -17,12 +18,12 @@ import { isLoading } from "expo-font";
 /**
  * Login screen component with authentication integration
  * Handles user sign-in and navigation to protected tabs
- */
-export default function LoginScreen() {
+ */export default function LoginScreen() {
   const router = useRouter();
   const { mutateAsync: signin } = useSigninMutation();
   const { login } = useAuth();
   const [isloading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null); // <- nouveau
 
   const { values, setFieldValue, handleSubmit } = useFormik<SigninPayload>({
     initialValues: {
@@ -32,27 +33,33 @@ export default function LoginScreen() {
     enableReinitialize: true,
     onSubmit: async (payload: SigninPayload) => {
       setLoading(true);
+      setErrorMessage(null); // réinitialise le message d'erreur à chaque soumission
       try {
-        // Authenticate user via API
         const response = await signin(payload);
 
-        // Use AuthContext to handle login and token storage
         await login({
           accessToken: response.accessToken,
           refreshToken: response.refreshToken,
         });
 
-        // Navigate to protected tabs
         router.replace("/(tabs)/home");
-      } catch (error) {
-        console.error("Login failed:", error);
-        // Handle login error (you might want to show an error message)
+      } catch (error: any) {
+        if (error.response?.status === 401 || error.response?.status === 400) {
+          // identifiants incorrects
+          setErrorMessage("Identifiant ou mot de passe incorrect");
+        } else {
+          // autre erreur serveur
+          setErrorMessage("Une erreur est survenue. Veuillez réessayer.");
+        }
       } finally {
         setLoading(false);
       }
     },
   });
-  const isFormValid = values.email.trim() !== "" && values.password.trim() !== "";
+
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim());
+  const isValidPassword = values.password.trim().length >= 6;
+  const isFormValid = isValidEmail && isValidPassword;
 
   return (
     <View style={styles.container}>
@@ -88,19 +95,26 @@ export default function LoginScreen() {
           />
         </View>
 
-        <TouchableOpacity>
-          <Text style={styles.forgotPassword}>{`Mot de passe oublié`}</Text>
+        {/* Affichage du message d'erreur sous les champs */}
+        {errorMessage && (
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        )}
+
+        <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password")}>
+          <Text style={styles.forgotPassword}>{`Mot de passe oublié ? `}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[
             styles.loginButton,
-            !isFormValid && styles.loginButtonDisabled, // style quand désactivé
+            !isFormValid && styles.loginButtonDisabled,
           ]}
           onPress={() => handleSubmit()}
           disabled={!isFormValid}
         >
-          <Text style={styles.loginButtonText}>{!isloading ? `Se connecter` : `Connexion . . . `}</Text>
+          <Text style={styles.loginButtonText}>
+            {!isloading ? `Se connecter` : `Connexion . . . `}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.push("/(auth)/signup")}>
@@ -115,6 +129,12 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  errorText: {
+    color: "#DC2626", // rouge
+    fontSize: 14,
+    marginTop: 8,
+    fontFamily: "Inter-Regular",
+  },
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",

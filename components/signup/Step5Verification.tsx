@@ -1,13 +1,15 @@
 import React, { useRef, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { styles } from "@/utils/style";
+import { API_BASE_URL } from "@/utils/constants";
 
 interface Props {
   code: string[];
   setCode: (v: string[]) => void;
   inputs: React.MutableRefObject<Array<TextInput | null>>;
   handleCodeChange: (value: string, index: number) => void;
-  isStep4Done: boolean
+  isStep4Done: boolean,
+  email: string;
 }
 
 const Step5Verification: React.FC<Props> = ({
@@ -15,7 +17,8 @@ const Step5Verification: React.FC<Props> = ({
   setCode,
   inputs,
   handleCodeChange,
-  isStep4Done
+  isStep4Done,
+  email
 }) => {
   const [timer, setTimer] = useState(0);
   const [isResending, setIsResending] = useState(false);
@@ -24,10 +27,23 @@ const Step5Verification: React.FC<Props> = ({
     if (timer > 0 || isResending) return;
 
     setIsResending(true);
-    // 👉 Simule l'envoi du code (remplace par ton API réelle)
+    const response = await fetch(`${API_BASE_URL}/auth/resend-code`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }), // ✅ envoie l'email au format JSON
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Erreur lors de la réinitialisation : ${err}`);
+    }
+
     console.log("📨 Code de vérification renvoyé !");
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setIsResending(false);
+
 
     // Lancer le timer de 60s
     setTimer(60);
