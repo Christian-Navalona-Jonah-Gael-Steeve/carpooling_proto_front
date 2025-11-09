@@ -4,12 +4,14 @@ import {
   IPrivateMessagePayload,
   MessageStatusPayload,
 } from '../types/chat.types';
+import { CallSignal } from '../types/call.types';
 
 type MessageHandler = (message: any) => void;
 
 export class WebSocketService {
   private client: Client | null = null;
   private subscriptions: Map<string, StompSubscription> = new Map();
+  private handlers: Map<string, Set<MessageHandler>> = new Map(); // Multiple handlers per subscription
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
@@ -122,6 +124,7 @@ export class WebSocketService {
           subscription.unsubscribe();
         });
         this.subscriptions.clear();
+        this.handlers.clear();
 
         this.client.deactivate();
         console.log('[WebSocket] Disconnected');
@@ -209,7 +212,38 @@ export class WebSocketService {
   }
 
   /**
-   * Generic subscribe method
+   * Send call signal
+   */
+  sendCallSignal(signal: CallSignal): void {
+    if (!this.client || !this.client.connected) {
+      console.error('[WebSocket] Cannot send call signal: not connected');
+      throw new Error('WebSocket not connected');
+    }
+
+    this.client.publish({
+      destination: '/app/call-signal',
+      body: JSON.stringify(signal),
+    });
+
+    console.log('[WebSocket] Sent call signal:', signal.type);
+  }
+
+  /**
+   * Subscribe to call signals
+   */
+  subscribeToCallSignals(handler: MessageHandler): () => void {
+    return this.subscribe(`/user/${this.userId}/call-signal`, handler, 'call-signal');
+  }
+
+  /**
+   * Get the STOMP client
+   */
+  getClient(): Client | null {
+    return this.client;
+  }
+
+  /**
+   * Generic subscribe method - supports multiple handlers per subscription
    */
   private subscribe(destination: string, handler: MessageHandler, key: string): () => void {
     if (!this.client || !this.client.connected) {
@@ -217,28 +251,59 @@ export class WebSocketService {
       throw new Error('WebSocket not connected');
     }
 
-    // Unsubscribe if already subscribed
-    if (this.subscriptions.has(key)) {
-      this.subscriptions.get(key)?.unsubscribe();
+    // Get or create handlers set for this key
+    if (!this.handlers.has(key)) {
+      this.handlers.set(key, new Set());
+    }
+    const handlersSet = this.handlers.get(key)!;
+
+    // Add the new handler
+    handlersSet.add(handler);
+    console.log(`[WebSocket] Added handler for ${key} (total: ${handlersSet.size})`);
+
+    // Create subscription if it doesn't exist
+    if (!this.subscriptions.has(key)) {
+      const subscription = this.client.subscribe(destination, (message: IMessage) => {
+        try {
+          const data = JSON.parse(message.body);
+          // Call all registered handlers for this subscription
+          const handlers = this.handlers.get(key);
+          if (handlers) {
+            handlers.forEach((h) => {
+              try {
+                h(data);
+              } catch (error) {
+                console.error(`[WebSocket] Error in ${key} handler:`, error);
+              }
+            });
+          }
+        } catch (error) {
+          console.error(`[WebSocket] Error parsing ${key} message:`, error);
+        }
+      });
+
+      this.subscriptions.set(key, subscription);
+      console.log(`[WebSocket] Subscribed to ${destination}`);
     }
 
-    const subscription = this.client.subscribe(destination, (message: IMessage) => {
-      try {
-        const data = JSON.parse(message.body);
-        handler(data);
-      } catch (error) {
-        console.error(`[WebSocket] Error parsing ${key} message:`, error);
-      }
-    });
-
-    this.subscriptions.set(key, subscription);
-    console.log(`[WebSocket] Subscribed to ${destination}`);
-
-    // Return unsubscribe function
+    // Return unsubscribe function that removes only this handler
     return () => {
-      subscription.unsubscribe();
-      this.subscriptions.delete(key);
-      console.log(`[WebSocket] Unsubscribed from ${destination}`);
+      const handlers = this.handlers.get(key);
+      if (handlers) {
+        handlers.delete(handler);
+        console.log(`[WebSocket] Removed handler for ${key} (remaining: ${handlers.size})`);
+
+        // If no more handlers, unsubscribe from the channel
+        if (handlers.size === 0) {
+          const subscription = this.subscriptions.get(key);
+          if (subscription) {
+            subscription.unsubscribe();
+            this.subscriptions.delete(key);
+            this.handlers.delete(key);
+            console.log(`[WebSocket] Unsubscribed from ${destination}`);
+          }
+        }
+      }
     };
   }
 }
