@@ -93,6 +93,10 @@ export default function MapsScreen() {
 
   const { activeTrips, setActiveTrips } = useActiveTrips();
   const { currentPos, setCurrentPos } = usePassengerLocation(role);
+  const currentPosRef = useRef<Coord | null>(null);
+  useEffect(() => {
+    currentPosRef.current = currentPos;
+  }, [currentPos]);
   const { end, myPath, start, onLongPress, openPublish, setEnd, setMyPath } =
     useDriverMap({
       role,
@@ -126,51 +130,6 @@ export default function MapsScreen() {
     setCloseModalTrip(t);
   };
 
-  // Trip event notifications for passengers nearby
-  // useEffect(() => {
-  //   if (role !== "passenger") return;
-  //   const off = onTripEvent((evt: any) => {
-  //     try {
-  //       const trip: TripResponse = evt?.trip || evt;
-  //       const type = evt?.type || "NEW";
-  //       if (!trip?.start || !currentPos) return;
-  //       const d = distanceMeters(
-  //         currentPos.latitude,
-  //         currentPos.longitude,
-  //         trip.start.lat,
-  //         trip.start.lng
-  //       );
-  //       if (d <= PROXIMITY_METERS) {
-  //         Alert.alert(
-  //           type === "IMMEDIATE" ? "Un conducteur part bientôt" : "Nouveau trajet proche",
-  //           "Voir ce trajet sur la carte ?",
-  //           [
-  //             { text: "Ignorer" },
-  //             { text: "Voir", onPress: () => focusTripPath(trip) },
-  //           ]
-  //         );
-  //       }
-  //     } catch { }
-  //   });
-  //   return () => {
-  //     if (off) off();
-  //   };
-  // }, [role, currentPos]);
-
-  // function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-  //   const R = 6371000;
-  //   const toRad = (x: number) => (x * Math.PI) / 180;
-  //   const dLat = toRad(lat2 - lat1);
-  //   const dLon = toRad(lon2 - lon1);
-  //   const a =
-  //     Math.sin(dLat / 2) ** 2 +
-  //     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-  //     Math.sin(dLon / 2) ** 2;
-  //   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  //   return R * c;
-  // }
-
-  // ⚠️ NE PAS MODIFIER : ta fonction existante
   const requestCarpool = async (tripId: string) => {
     if (!start || !end) return;
     await createRideRequest({
@@ -318,10 +277,11 @@ export default function MapsScreen() {
       try {
         const trip: TripResponse = evt?.trip || evt;
         const type = evt?.type || "NEW";
-        if (!trip?.start || !currentPos) return;
+        const pos = currentPosRef.current;
+        if (!trip?.start || !pos) return;
         const d = distanceMeters(
-          currentPos.latitude,
-          currentPos.longitude,
+          pos.latitude,
+          pos.longitude,
           trip.start.lat,
           trip.start.lng
         );
@@ -345,14 +305,22 @@ export default function MapsScreen() {
     return () => {
       if (off) off();
     };
-  }, [role, currentPos]);
+  }, [role, onTripEvent]);
 
   function upsertSuggestionFromTrip(trip: TripResponse) {
+    const pos = currentPosRef.current;
+    const sd = pos
+      ? distanceMeters(pos.latitude, pos.longitude, trip.start.lat, trip.start.lng)
+      : 0;
+    const ed = end
+      ? distanceMeters(end.latitude, end.longitude, trip.end.lat, trip.end.lng)
+      : 0;
+
     setMatches((prev) => {
       const exists = prev.some((m) => m.trip.id === trip.id);
       const next: TripMatchResponse[] = exists
-        ? prev.map((m) => (m.trip.id === trip.id ? { ...m, trip } : m))
-        : [{ trip, startDist: 0, endDist: 0 } as TripMatchResponse, ...prev];
+        ? prev.map((m) => (m.trip.id === trip.id ? { ...m, trip, startDist: sd, endDist: ed } : m))
+        : [{ trip, startDist: sd, endDist: ed } as TripMatchResponse, ...prev];
       return next;
     });
     setVisibleSuggestionId(trip.id);
