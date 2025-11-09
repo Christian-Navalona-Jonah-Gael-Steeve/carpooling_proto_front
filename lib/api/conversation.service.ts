@@ -29,5 +29,21 @@ export const ConversationService = {
             }
         });
         return response.data;
+    },
+
+    /**
+     * Find existing conversation between current user and another user
+     */
+    findConversationWith: async (otherUserId: string): Promise<IConversation | null> => {
+        try {
+            const response = await api.get<IConversation>(`/conversations/with/${otherUserId}`);
+            return response.data;
+        } catch (error: any) {
+            // Return null if conversation not found (404)
+            if (error.response?.status === 404) {
+                return null;
+            }
+            throw error;
+        }
     }
 };

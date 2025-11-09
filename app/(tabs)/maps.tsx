@@ -24,6 +24,7 @@ import {
   TripResponse,
   searchTrips,
 } from "@/lib/api/trips.service";
+import { ConversationService } from "@/lib/api/conversation.service";
 import { Coord } from "@/lib/types/coord.types";
 import { Role } from "@/lib/types/user.types";
 import { fmtDate, fmtTime } from "@/lib/utils/date-format";
@@ -40,6 +41,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 
 type RNLatLng = { latitude: number; longitude: number };
 
@@ -49,6 +51,7 @@ const shortId = (id?: string) => (id ? id.slice(0, 8) : "—");
 
 export default function MapsScreen() {
   const mapRef = useRef<any>(null);
+  const router = useRouter();
 
   // ---- suggestions ------
   const [matches, setMatches] = useState<TripMatchResponse[]>([]);
@@ -142,6 +145,25 @@ export default function MapsScreen() {
       userId: user?.uid,
     });
     Alert.alert("Envoyé", "Demande transmise au conducteur.");
+  };
+
+  // Handler for opening chat with driver
+  const handleOpenChat = async (driverId: string) => {
+    try {
+      // Check if conversation already exists
+      const existingConversation = await ConversationService.findConversationWith(driverId);
+
+      if (existingConversation) {
+        // Open existing conversation
+        router.push(`/chats/${existingConversation.conversationId}`);
+      } else {
+        // Create new conversation flow
+        router.push(`/chats/0?driverId=${driverId}`);
+      }
+    } catch (error) {
+      console.error("Error opening chat:", error);
+      Alert.alert("Erreur", "Impossible d'ouvrir la conversation.");
+    }
   };
 
   // focus trajet
@@ -255,15 +277,7 @@ export default function MapsScreen() {
     const c = { latitude: parseFloat(g.lat), longitude: parseFloat(g.lon) };
     setEnd(c);
     // le passager ne trace pas ; le driver peut tracer s’il veut (mais ici role=passenger)
-  };
-
-  if (Platform.OS === "web") {
-    return (
-      <View style={styles.center}>
-        <Text>Carte indisponible sur le web.</Text>
-      </View>
-    );
-  }
+  }; 
 
   const ownActiveTrips = activeTrips.filter((t) => t.driver.uid === userId);
   const visibleMatches = visibleSuggestionId
@@ -341,6 +355,14 @@ export default function MapsScreen() {
       Math.sin(dLon / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.center}>
+        <Text>Carte indisponible sur le web.</Text>
+      </View>
+    );
   }
 
   return (
@@ -601,7 +623,10 @@ export default function MapsScreen() {
                         👁️
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.chatBtn} onPress={() => { }}>
+                    <TouchableOpacity
+                      style={styles.chatBtn}
+                      onPress={() => handleOpenChat(item.trip.driver.uid)}
+                    >
                       <Text style={{ color: "#000", fontWeight: "700" }}>
                         ✉️
                       </Text>
