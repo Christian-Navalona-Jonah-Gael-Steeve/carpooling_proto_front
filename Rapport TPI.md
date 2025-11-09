@@ -181,17 +181,8 @@ Méthode **Scrum** avec :
 
 ### Architecture Générale
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌────────────────────┐
-│   Frontend      │    │    Backend       │    │   Base de Données  │
-│  React Native   │◄──►│   Spring Boot    │◄──►│   PostgreSQL        │
-│     + Expo      │    │  REST + STOMP    │    │   (géospatial)      │
-└─────────────────┘    └──────────────────┘    └────────────────────┘
-          │                       │
-          │ WebSocket             │ Auth / Mail
-          ▼                       ▼
-      Client WS               Services tiers
-```
+
+![Aperçu de l'application](images/Architecture.png)
 
 ### Composants Techniques
 
