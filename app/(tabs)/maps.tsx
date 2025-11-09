@@ -1,3 +1,4 @@
+import { DriverRatingDisplay } from "@/components/map/DriverRatingDisplay";
 import { DriverTrips } from "@/components/map/DriverTrips";
 import LoadingOverlay from "@/components/map/LoadingOverlay";
 import ChooseTripTypeModal from "@/components/map/modals/ChooseTripTypeModal";
@@ -53,6 +54,7 @@ export default function MapsScreen() {
   const [matches, setMatches] = useState<TripMatchResponse[]>([]);
   const [showSheet, setShowSheet] = useState<boolean>(true);
   const [isSearching, setIsSearching] = useState(false);
+
   const [visibleSuggestionId, setVisibleSuggestionId] = useState<string | null>(
     null
   );
@@ -571,6 +573,9 @@ export default function MapsScreen() {
                     }}
                   >
                     <Text style={styles.sub}>Conducteur : {driverName}</Text>
+                    <DriverRatingDisplay
+                      driverId={item.trip.driver.uid}
+                    />
                   </View>
                   <Text style={styles.sub}>
                     Départ : {fmtDate(item.trip.departureAt)} •{" "}
