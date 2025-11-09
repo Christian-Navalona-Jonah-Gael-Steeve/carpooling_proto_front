@@ -202,6 +202,13 @@ export class WebSocketService {
   }
 
   /**
+   * Subscribe to trip topic events
+   */
+  subscribeToTripEvents(handler: MessageHandler): () => void {
+    return this.subscribe(`/topic/trips`, handler, 'trips');
+  }
+
+  /**
    * Generic subscribe method
    */
   private subscribe(destination: string, handler: MessageHandler, key: string): () => void {
