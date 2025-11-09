@@ -53,7 +53,6 @@ export const useCreateReview = () => {
     return useMutation({
         mutationFn: ReviewService.createReview,
         onSuccess: (data, variables) => {
-            // Invalider les requêtes concernées
             queryClient.invalidateQueries({ 
                 queryKey: reviewKeys.driver(variables.driverId) 
             });
@@ -78,11 +77,10 @@ export const useUpdateReview = () => {
       ReviewService.updateReview(reviewId, data),
     onSuccess: (data) => {
       const driverId = data.driver.uid;
-      const reviewerId = data.reviewer.uid; // ← récupère l’ID du reviewer depuis la réponse
+      const reviewerId = data.reviewer.uid;
 
       queryClient.invalidateQueries({ queryKey: reviewKeys.driver(driverId) });
       queryClient.invalidateQueries({ queryKey: reviewKeys.userRating(driverId) });
-      // 🔥 Ajoute cette ligne :
       queryClient.invalidateQueries({ queryKey: reviewKeys.userReview(driverId, reviewerId) });
     },
     onError: (error: Error) => {

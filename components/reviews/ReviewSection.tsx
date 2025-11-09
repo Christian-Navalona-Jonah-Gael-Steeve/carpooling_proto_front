@@ -1,4 +1,3 @@
-// components/reviews/ReviewSection.tsx
 import { useAuth } from '@/contexts/auth.context';
 import {
   useDriverRating,
@@ -53,7 +52,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
 
   const canEditReview = user && userReview;
 
-  // Gérer le cas où reviews est undefined
   const reviewsList = reviews || [];
   const recentReviews = showAll ? reviewsList : reviewsList.slice(0, 3);
   const totalReviews = reviewsList.length;
@@ -101,7 +99,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
-      {/* En-tête avec note moyenne */}
       <View style={styles.header}>
         <View style={styles.ratingSummary}>
           <View style={styles.ratingNumber}>
@@ -121,7 +118,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
           </View>
         </View>
 
-        {/* Bouton d'action */}
         {user && user.uid !== driverId && (
           <View style={styles.actionButtons}>
             {canReview && (
@@ -146,7 +142,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
         )}
       </View>
 
-      {/* Liste des avis */}
       {totalReviews > 0 && (
         <View style={styles.reviewsContainer}>
           <Text style={styles.reviewsTitle}>Avis récents</Text>
@@ -165,7 +160,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
             ))}
           </ScrollView>
 
-          {/* Bouton "Voir plus" / "Voir moins" */}
           {totalReviews > 3 && (
             <TouchableOpacity 
               style={styles.showMoreButton}
@@ -184,7 +178,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
         </View>
       )}
 
-      {/* Aucun avis */}
       {totalReviews === 0 && (
         <View style={styles.noReviews}>
           <Ionicons name="star-outline" size={32} color="#D1D5DB" />
@@ -199,7 +192,6 @@ export const ReviewSection: React.FC<ReviewSectionProps> = ({
         </View>
       )}
 
-      {/* Modal d'avis */}
       <ReviewModal
         visible={isReviewModalVisible}
         onClose={() => setReviewModalVisible(false)}

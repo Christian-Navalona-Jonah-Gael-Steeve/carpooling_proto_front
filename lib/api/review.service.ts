@@ -11,8 +11,6 @@ static async createReview(data: CreateReviewRequest): Promise<IReview> {
             body: JSON.stringify(data),
         });
         
-        // NE PAS utiliser response.text() ET response.json()
-        // Choisir une seule méthode pour lire la réponse
         const responseText = await response.text();
         
         if (!response.ok) {
@@ -26,7 +24,6 @@ static async createReview(data: CreateReviewRequest): Promise<IReview> {
             throw new Error(errorMessage);
         }
         
-        // Parser la réponse seulement si elle n'est pas vide
         if (responseText) {
             return JSON.parse(responseText);
         } else {
@@ -76,12 +73,12 @@ static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<
             const response = await fetch(`http://10.78.221.229:8080/api/reviews/driver/${driverId}`);
             
             if (!response.ok) {
-                return []; // Tableau vide sans erreur
+                return [];
             }
             
             return await response.json();
         } catch (error) {
-            return []; // Tableau vide sans erreur
+            return []; 
         }
     }
 
@@ -90,7 +87,6 @@ static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<
             const response = await fetch(`http://10.78.221.229:8080/api/reviews/user/${driverId}/rating`);
             
             if (!response.ok) {
-                // Retourner des valeurs par défaut sans logger d'erreur
                 return {
                     totalReviews: 0,
                     averageRating: 0
@@ -103,7 +99,6 @@ static async updateReview(reviewId: string, data: UpdateReviewRequest): Promise<
                 averageRating: data.averageRating || 0
             };
         } catch (error) {
-            // Ne pas logger l'erreur pour éviter de polluer la console
             return {
                 totalReviews: 0,
                 averageRating: 0
