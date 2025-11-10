@@ -1,0 +1,15 @@
+export enum CallType {
+    AUDIO = 'AUDIO',
+    VIDEO = 'VIDEO'
+}
+
+export enum CallSignalType {
+    OFFER = 'OFFER',
+    ANSWER = 'ANSWER',
+    ICE_CANDIDATE = 'ICE_CANDIDATE',
+    CALL_REQUEST = 'CALL_REQUEST',
+    CALL_ACCEPTED = 'CALL_ACCEPTED',
+    CALL_REJECTED = 'CALL_REJECTED',
+    CALL_ENDED = 'CALL_ENDED',
+    CALL_CANCELLED = 'CALL_CANCELLED'
+}

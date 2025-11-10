@@ -6,12 +6,19 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "typeRoots": [
+      "./node_modules/@types",
+      "./types"
+    ]
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+, "lib/ws/websocket.ts.example"  ],
+  "exclude": [
+    "lib/ws/ConversationListScreen.example.tsx"
   ]
 }

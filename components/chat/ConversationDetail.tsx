@@ -1,12 +1,14 @@
-import { DateSeparator } from "@/components/chat/DateSeparator";
-import { MessageInput } from "@/components/chat/MessageInput";
-import { MessageItem } from "@/components/chat/MessageItem";
 import { useAuth } from "@/contexts/auth.context";
 import {
   useGetConversation,
   useGetInfiniteConversationMessages,
 } from "@/hooks/queries/chat.queries";
 import { useChatManager } from "@/hooks/useChatManager";
+import { useWebRTC } from "@/contexts/webrtc.context";
+import { CallType } from "@/lib/enums/call.enums";
+import { MessageItem } from "@/components/chat/MessageItem";
+import { MessageInput } from "@/components/chat/MessageInput";
+import { DateSeparator } from "@/components/chat/DateSeparator";
 import { IConversationMessage } from "@/lib/types/conversation.types";
 import { isDifferentDay } from "@/lib/utils/date.utils";
 import { getParticipantDisplayName } from "@/lib/utils/participant.utils";
@@ -40,6 +42,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   const { user } = useAuth();
   const { sendMessage, markAsRead, isConnected, retryMessage } =
     useChatManager();
+  const { initiateCall } = useWebRTC();
   const flatListRef = useRef<FlatList>(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
 
@@ -75,7 +78,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   }, [messagesData?.pages]);
 
   // For new conversations (id=0), use driverId; otherwise get from conversation
-  const otherParticipant = React.useMemo(() => {
+  const recipient = React.useMemo(() => {
     if (conversationId === 0 && driverId && driver) {
       // Return a minimal participant object for new conversations
       if(driver) return driver;
@@ -121,11 +124,11 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
   }, [conversationId, messages.length, user, markAsRead, messages]);
 
   const handleSend = (content: string) => {
-    if (!otherParticipant) return;
+    if (!recipient || !conversationId) return;
 
     // For new conversations (id=0), pass undefined to let backend create it
     sendMessage(
-      otherParticipant.uid,
+      recipient.uid,
       content,
       conversationId === 0 ? undefined : conversationId
     );
@@ -147,6 +150,38 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
+  };
+
+  const handleAudioCall = async () => {
+    if (!recipient) return;
+
+    console.log("[ConversationDetail] Initiating audio call with:", {
+      recipient,
+      uid: recipient.uid,
+      parsedUid: parseInt(recipient.uid)
+    });
+
+    try {
+      await initiateCall(recipient, CallType.AUDIO);
+    } catch (error) {
+      console.error(
+        "[ConversationDetail] Failed to initiate audio call:",
+        error
+      );
+    }
+  };
+
+  const handleVideoCall = async () => {
+    if (!recipient) return;
+
+    try {
+      await initiateCall(recipient, CallType.VIDEO);
+    } catch (error) {
+      console.error(
+        "[ConversationDetail] Failed to initiate video call:",
+        error
+      );
+    }
   };
 
   const renderItem = ({
@@ -230,7 +265,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
 
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {getParticipantDisplayName(otherParticipant)}
+            {getParticipantDisplayName(recipient)}
           </Text>
           <View style={styles.statusContainer}>
             <View
@@ -248,16 +283,20 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
         <View style={styles.callButtons}>
           <TouchableOpacity
             style={styles.callButton}
-            onPress={() => {/* audio call action */}}
-            accessibilityLabel={`Call ${getParticipantDisplayName(otherParticipant)}`}
+            onPress={handleAudioCall}
+            accessibilityLabel={`Call ${getParticipantDisplayName(
+              recipient
+            )}`}
             accessibilityRole="button"
           >
             <Ionicons name="call-outline" size={20} color="#2563EB" />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.callButton}
-            onPress={() => {/* video call action */}}
-            accessibilityLabel={`Video call ${getParticipantDisplayName(otherParticipant)}`}
+            onPress={handleVideoCall}
+            accessibilityLabel={`Video call ${getParticipantDisplayName(
+              recipient
+            )}`}
             accessibilityRole="button"
           >
             <Ionicons name="videocam-outline" size={20} color="#2563EB" />
@@ -291,10 +330,10 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
         />
 
         
-        {otherParticipant && (
+        {recipient && (
           <ReviewSection
-            driverId={otherParticipant.uid}
-            driverName={otherParticipant.firstName + ' ' + otherParticipant.lastName}
+            driverId={recipient.uid}
+            driverName={recipient.firstName + ' ' + recipient.lastName}
             compact={true}
           />
         )}
@@ -302,7 +341,7 @@ export const ConversationDetail: React.FC<ConversationDetailProps> = ({
         {/* Message input */}
         <MessageInput
           onSend={handleSend}
-          disabled={!isConnected || !otherParticipant}
+          disabled={!isConnected || !recipient}
         />
       </KeyboardAvoidingView>
     </View>
