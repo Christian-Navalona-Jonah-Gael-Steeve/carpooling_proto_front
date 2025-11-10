@@ -9,10 +9,15 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LogBox } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
 
 import { useColorScheme } from "@/hooks/useColorScheme";
 import ReactQueryProvider from "@/providers/react-query.provider";
 import { AuthProvider } from "@/contexts/auth.context";
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
 
 // Disable all warnings and errors in LogBox
 LogBox.ignoreAllLogs(true);
@@ -29,12 +34,21 @@ LogBox.ignoreAllLogs(true);
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
 
+  useEffect(() => {
+    if (error) throw error;
+  }, [error]);
+
+  useEffect(() => {
+    if (loaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded]);
+
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
